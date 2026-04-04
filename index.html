@@ -1,0 +1,971 @@
+import { useState, useEffect, useRef, useCallback } from “react”;
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const PROGRAM = {
+1: {
+title: “اليوم الأول — عضلات الدفع”, sub: “صدر • كتف • ترايسبس”, icon: “💪”,
+exercises: [
+{ name: “بنش برس مستوي”, sets: 3, reps: “٨”, ytq: “bench+press+form” },
+{ name: “بنش برس علوي (Incline)”, sets: 3, reps: “٨”, ytq: “incline+bench+press” },
+{ name: “كتف أمامي (Front Raise)”, sets: 3, reps: “٨–١٢”, ytq: “front+raise+shoulder” },
+{ name: “تفتيح صدر (Chest Fly)”, sets: 3, reps: “١٢–١٥”, ytq: “chest+fly+dumbbell” },
+{ name: “ترايسبس كيبل (Pushdown)”, sets: 3, reps: “١٢”, ytq: “triceps+cable+pushdown” },
+{ name: “كتف جانبي — تكنيك ٨-٧-٨”, sets: 3, reps: “٨+٧+٨”, tech: true, ytq: “lateral+raise+technique” },
+],
+},
+2: {
+title: “اليوم الثاني — عضلات السحب”, sub: “ظهر • بايسبس • كتف”, icon: “🏋️”,
+exercises: [
+{ name: “سحب علوي واسع (Wide Pulldown)”, sets: 3, reps: “٨–١٢”, ytq: “lat+pulldown+wide+grip” },
+{ name: “سحب علوي ضيق (Close Pulldown)”, sets: 3, reps: “١٢”, ytq: “lat+pulldown+close+grip” },
+{ name: “سحب أفقي واسع (Wide Row)”, sets: 3, reps: “٨–١٢”, ytq: “seated+cable+row+wide” },
+{ name: “سحب أفقي ضيق (Close Row)”, sets: 3, reps: “١٢”, ytq: “seated+cable+row+close” },
+{ name: “كتف أمامي + بايسبس كيبل”, sets: 3, reps: “١٢”, sup: true, ytq: “cable+bicep+curl” },
+{ name: “كتف جانبي — تكنيك ٨-٧-٨”, sets: 3, reps: “٨+٧+٨”, tech: true, ytq: “lateral+raise+dropset” },
+{ name: “بايسبس — تكنيك ٨-٧-٨”, sets: 3, reps: “٨+٧+٨”, tech: true, ytq: “bicep+curl+technique” },
+],
+},
+3: {
+title: “اليوم الثالث — عضلات الأرجل”, sub: “كوادريسبس • هامسترينج • غلوتس”, icon: “🦵”,
+exercises: [
+{ name: “سكوات (Squat)”, sets: 3, reps: “٨”, ytq: “squat+form+tutorial” },
+{ name: “رفرفة أمامية (Leg Extension)”, sets: 3, reps: “٨–١٢”, ytq: “leg+extension+machine” },
+{ name: “رفرفة خلفية (Leg Curl)”, sets: 3, reps: “٨–١٢”, ytq: “leg+curl+hamstring” },
+{ name: “Leg Press”, sets: 3, reps: “٨”, ytq: “leg+press+machine+form” },
+{ name: “البطات (Calf Raises)”, sets: 3, reps: “١٥”, ytq: “calf+raises+standing” },
+{ name: “غلوتس + العضلة الضامة”, sets: 3, reps: “١٢–١٥”, sup: true, ytq: “glute+abductor+superset” },
+],
+},
+4: { ref: 1, note: “نفس اليوم الأول — حاول تزيد الوزن! 🔥” },
+5: { ref: 2, note: “نفس اليوم الثاني — انهِ الأسبوع بقوة! 💪” },
+};
+
+const INIT_DB = {
+users: {
+admin: { pass: “admin123”, role: “admin”, name: “المدرب” },
+khalid: { pass: “1234”, role: “member”, id: “m1” },
+mohammed: { pass: “1234”, role: “member”, id: “m2” },
+},
+members: {
+m1: { id: “m1”, username: “khalid”, name: “خالد العتيبي”, phone: “0501234567”, age: 25, weight: 85, height: 178, goal: “بناء عضلات”, notes: “متمرن متقدم، لديه إصابة قديمة في الكتف”, points: 4820, streak: 21, status: “active”, joined: “2025-01-15”, attendance: [“done”,“done”,“miss”,“done”,“done”,“rest”,“today”], challenges: [0, 1], badges: [“💪 القوة”,“⚡ الدقة”,“🔥 الثبات”] },
+m2: { id: “m2”, username: “mohammed”, name: “محمد الغامدي”, phone: “0559876543”, age: 28, weight: 78, height: 175, goal: “خسارة وزن”, notes: “مبتدئ يحتاج متابعة خاصة”, points: 4210, streak: 18, status: “active”, joined: “2025-02-01”, attendance: [“done”,“done”,“done”,“done”,“miss”,“rest”,“today”], challenges: [0], badges: [“💪 القوة”,“🔥 الثبات”] },
+},
+challenges: [
+{ id: 0, icon: “🔥”, title: “تحدي الحضور الكامل”, desc: “أكمل الأيام الخمسة هذا الأسبوع.”, points: 500 },
+{ id: 1, icon: “💪”, title: “تحدي الوزن الجديد”, desc: “زد الوزن في البنش برس ولو 2.5 كيلو.”, points: 300 },
+{ id: 2, icon: “⚡”, title: “تحدي التكنيك المتقدم”, desc: “طبّق تكنيك ٨-٧-٨ في كل تمارين الكتف.”, points: 400 },
+{ id: 3, icon: “🦵”, title: “تحدي عضلات الأرجل”, desc: “أكمل يوم الأرجل الكامل بما فيه السوبر سيت.”, points: 600 },
+],
+};
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const S = {
+app: { fontFamily: “‘Cairo’,sans-serif”, background: “#0a0f1e”, color: “#c8d4e8”, minHeight: “100vh”, direction: “rtl” },
+// nav
+nav: { position: “sticky”, top: 0, zIndex: 100, display: “flex”, alignItems: “center”, justifyContent: “space-between”, padding: “0.8rem 1.5rem”, background: “rgba(10,15,30,0.97)”, backdropFilter: “blur(20px)”, borderBottom: “1px solid rgba(100,130,200,0.12)” },
+logo: { fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.3rem”, fontWeight: 700, letterSpacing: 3, background: “linear-gradient(135deg,#d8e4f4,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” },
+tabsNav: { display: “flex”, gap: 4, padding: “0.6rem 1.5rem”, background: “rgba(13,21,48,0.7)”, borderBottom: “1px solid rgba(100,130,200,0.08)”, overflowX: “auto” },
+content: { padding: “1.5rem”, maxWidth: 1100, margin: “0 auto”, width: “100%” },
+// cards
+card: { background: “rgba(13,21,48,0.85)”, border: “1px solid rgba(100,130,200,0.12)”, borderRadius: 12, padding: “1.2rem”, marginBottom: “1.2rem” },
+cardTitle: { fontFamily: “‘Oswald’,sans-serif”, fontSize: “0.95rem”, fontWeight: 700, color: “#d8e4f4”, letterSpacing: 1, marginBottom: “1rem”, display: “flex”, alignItems: “center”, gap: 6 },
+// login
+loginWrap: { minHeight: “100vh”, display: “flex”, alignItems: “center”, justifyContent: “center”, background: “radial-gradient(ellipse 80% 60% at 50% 0%,rgba(20,50,120,0.45),transparent 70%),#0a0f1e” },
+loginBox: { width: 400, maxWidth: “92vw”, background: “rgba(13,21,48,0.92)”, border: “1px solid rgba(100,130,200,0.2)”, borderRadius: 16, padding: “2.5rem 2rem”, boxShadow: “0 30px 80px rgba(0,0,0,0.5)” },
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const toEmbed = (url) => {
+if (!url) return null;
+url = url.trim();
+let id = “”;
+try {
+if (url.includes(“youtu.be/”)) id = url.split(“youtu.be/”)[1].split(/[?&]/)[0];
+else if (url.includes(“youtube.com/watch”)) { const u = new URL(url); id = u.searchParams.get(“v”); }
+else if (url.includes(“youtube.com/embed/”)) return url.split(”?”)[0];
+else if (/^[a-zA-Z0-9_-]{11}$/.test(url)) id = url;
+if (id) return `https://www.youtube.com/embed/${id}`;
+} catch (e) {}
+return null;
+};
+const fromEmbed = (e) => e && e.includes(”/embed/”) ? “https://youtu.be/” + e.split(”/embed/”)[1] : (e || “”);
+
+const playBeep = () => {
+try {
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const osc = ctx.createOscillator(); const g = ctx.createGain();
+osc.connect(g); g.connect(ctx.destination);
+osc.frequency.value = 880; osc.type = “sine”;
+g.gain.setValueAtTime(0.3, ctx.currentTime);
+g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+osc.start(); osc.stop(ctx.currentTime + 0.6);
+} catch (e) {}
+};
+
+// ─── SMALL COMPONENTS ────────────────────────────────────────────────────────
+const Btn = ({ children, onClick, style = {}, variant = “ghost”, size = “md” }) => {
+const base = { border: “none”, borderRadius: 7, fontFamily: “‘Cairo’,sans-serif”, fontWeight: 700, cursor: “pointer”, transition: “all .2s”, display: “inline-flex”, alignItems: “center”, gap: 4, whiteSpace: “nowrap” };
+const sz = size === “sm” ? { padding: “0.3rem 0.8rem”, fontSize: “0.78rem” } : { padding: “0.55rem 1.1rem”, fontSize: “0.85rem” };
+const variants = {
+gold: { background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, color: “#0a0f1e”, boxShadow: “0 0 14px rgba(201,168,76,0.25)” },
+primary: { background: “linear-gradient(135deg,#1e3a6e,#2a4d8f)”, color: “#d8e4f4” },
+ghost: { background: “rgba(100,130,200,0.1)”, border: “1px solid rgba(100,130,200,0.2)”, color: “#c8d4e8” },
+danger: { background: “rgba(239,68,68,0.12)”, border: “1px solid rgba(239,68,68,0.3)”, color: “#f87171” },
+green: { background: “rgba(34,197,94,0.13)”, border: “1px solid rgba(34,197,94,0.3)”, color: “#4ade80” },
+};
+return <button onClick={onClick} style={{ …base, …sz, …variants[variant], …style }}>{children}</button>;
+};
+
+const Badge = ({ children, color = “blue” }) => {
+const colors = {
+gold: { background: “rgba(201,168,76,0.13)”, border: “1px solid rgba(201,168,76,0.3)”, color: “#e8c96a” },
+blue: { background: “rgba(100,150,255,0.12)”, border: “1px solid rgba(100,150,255,0.25)”, color: “#93c5fd” },
+green: { background: “rgba(34,197,94,0.12)”, border: “1px solid rgba(34,197,94,0.3)”, color: “#4ade80” },
+red: { background: “rgba(239,68,68,0.12)”, border: “1px solid rgba(239,68,68,0.3)”, color: “#f87171” },
+purple: { background: “rgba(200,100,255,0.1)”, border: “1px solid rgba(200,100,255,0.28)”, color: “#d080ff” },
+orange: { background: “rgba(249,115,22,0.12)”, border: “1px solid rgba(249,115,22,0.3)”, color: “#fb923c” },
+};
+return <span style={{ display: “inline-block”, padding: “0.15rem 0.6rem”, borderRadius: 20, fontSize: “0.72rem”, fontWeight: 700, …colors[color] }}>{children}</span>;
+};
+
+const Input = ({ value, onChange, placeholder, type = “text”, style = {} }) => (
+<input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} type={type}
+style={{ width: “100%”, padding: “0.7rem 0.9rem”, background: “rgba(30,58,110,0.22)”, border: “1px solid rgba(100,130,200,0.22)”, borderRadius: 8, color: “#f0f4ff”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “0.9rem”, outline: “none”, …style }} />
+);
+
+const Avatar = ({ letter, size = 36, gold = false }) => (
+
+  <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#1e3a6e,#2a4d8f)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: size * 0.38, color: "#d8e4f4", border: `2px solid ${gold ? "#e8c96a" : "rgba(201,168,76,0.35)"}`, flexShrink: 0 }}>{letter}</div>
+);
+
+const Notif = ({ msg, visible, type }) => (
+
+  <div style={{ position: "fixed", bottom: "2rem", left: "50%", transform: `translateX(-50%) translateY(${visible ? "0" : "120px"})`, background: type === "error" ? "rgba(239,68,68,0.93)" : type === "info" ? "rgba(30,58,110,0.96)" : "rgba(34,197,94,0.92)", color: "#fff", padding: "0.85rem 2rem", borderRadius: 50, fontWeight: 700, fontSize: "0.9rem", zIndex: 600, transition: "transform .4s ease", boxShadow: "0 10px 30px rgba(0,0,0,0.35)", maxWidth: "90vw", textAlign: "center", border: type === "info" ? "1px solid rgba(100,150,255,0.3)" : "none" }}>{msg}</div>
+);
+
+// ─── REST ALERT OVERLAY ───────────────────────────────────────────────────────
+const RestAlert = ({ seconds, onSkip, visible }) => {
+const urgent = seconds <= 5;
+return (
+<div style={{ position: “fixed”, inset: 0, zIndex: 400, background: “rgba(0,0,0,0.85)”, backdropFilter: “blur(12px)”, display: “flex”, alignItems: “center”, justifyContent: “center”, opacity: visible ? 1 : 0, pointerEvents: visible ? “all” : “none”, transition: “opacity .3s” }}>
+<div style={{ background: “#0d1530”, border: “2px solid rgba(201,168,76,0.35)”, borderRadius: 20, padding: “2.5rem 2rem”, textAlign: “center”, maxWidth: 320, width: “90%” }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.4rem”, color: “#f0f4ff”, marginBottom: 4 }}>⏸ وقت الراحة</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.85rem”, marginBottom: “1.5rem” }}>استرح قبل الجولة التالية</div>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “4.5rem”, fontWeight: 700, lineHeight: 1, marginBottom: 4, background: urgent ? “linear-gradient(135deg,#ef4444,#f97316)” : “linear-gradient(135deg,#c9a84c,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” }}>{seconds}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.8rem”, marginBottom: “1.5rem” }}>ثانية متبقية</div>
+<Btn onClick={onSkip} variant=“ghost” style={{ borderRadius: 50 }}>تخطي الراحة ⚡</Btn>
+</div>
+</div>
+);
+};
+
+// ─── EXERCISE DETAIL MODAL ────────────────────────────────────────────────────
+const ExModal = ({ exercise, dayNum, exIdx, onClose, videoStore, onSaveVideo, exState, onStateChange, onNotif }) => {
+const key = `${dayNum}_${exIdx}`;
+const state = exState[key] || { completedSets: 0, logs: [], done: false };
+const totalSets = exercise.sets;
+
+const [urlInput, setUrlInput] = useState(fromEmbed(videoStore[key] || “”));
+const [reps, setReps] = useState(8);
+const [weight, setWeight] = useState(””);
+const [restSecs, setRestSecs] = useState(60);
+const [timerLeft, setTimerLeft] = useState(60);
+const [timerRunning, setTimerRunning] = useState(false);
+const [timerDone, setTimerDone] = useState(false);
+const [showRest, setShowRest] = useState(false);
+const [restLeft, setRestLeft] = useState(0);
+const timerRef = useRef(null);
+const restRef = useRef(null);
+
+useEffect(() => { setTimerLeft(restSecs); setTimerDone(false); setTimerRunning(false); clearInterval(timerRef.current); }, [restSecs]);
+
+const startTimer = () => {
+if (timerRunning) { clearInterval(timerRef.current); setTimerRunning(false); return; }
+if (timerLeft <= 0) { setTimerLeft(restSecs); }
+setTimerDone(false);
+setTimerRunning(true);
+timerRef.current = setInterval(() => {
+setTimerLeft(prev => {
+if (prev <= 1) { clearInterval(timerRef.current); setTimerRunning(false); setTimerDone(true); playBeep(); return 0; }
+return prev - 1;
+});
+}, 1000);
+};
+const resetTimerFn = () => { clearInterval(timerRef.current); setTimerRunning(false); setTimerLeft(restSecs); setTimerDone(false); };
+
+const startRestOverlay = (secs) => {
+setRestLeft(secs); setShowRest(true);
+restRef.current = setInterval(() => {
+setRestLeft(prev => {
+if (prev <= 1) { clearInterval(restRef.current); setShowRest(false); playBeep(); onNotif(“💪 انتهت الراحة — ابدأ الجولة التالية!”, “info”); return 0; }
+return prev - 1;
+});
+}, 1000);
+};
+
+const logSet = () => {
+if (state.completedSets >= totalSets) { onNotif(“✅ كل الجولات مكتملة!”); return; }
+const newLogs = […state.logs, { set: state.completedSets + 1, reps, weight: weight || “—”, time: new Date().toLocaleTimeString(“ar-SA”, { hour: “2-digit”, minute: “2-digit” }) }];
+const newComp = state.completedSets + 1;
+const done = newComp >= totalSets;
+onStateChange(key, { …state, completedSets: newComp, logs: newLogs, done });
+if (done) { onNotif(“🏆 أكملت كل جولات التمرين!”); }
+else { onNotif(`✓ الجولة ${newComp} — ابدأ الراحة!`, “info”); startRestOverlay(restSecs); }
+};
+
+const resetSets = () => onStateChange(key, { completedSets: 0, logs: [], done: false });
+
+const handleSaveVideo = () => {
+const embed = toEmbed(urlInput);
+if (!embed) { onNotif(“❌ رابط غير صالح”, “error”); return; }
+onSaveVideo(key, embed);
+onNotif(“🎬 تم تحميل الفيديو”);
+};
+
+const pct = timerLeft / restSecs;
+const circumference = 2 * Math.PI * 46;
+const dashOffset = circumference * (1 - pct);
+
+return (
+<>
+<RestAlert seconds={restLeft} visible={showRest} onSkip={() => { clearInterval(restRef.current); setShowRest(false); onNotif(“⚡ تخطيت الراحة!”); }} />
+<div style={{ position: “fixed”, inset: 0, background: “rgba(0,0,0,0.78)”, backdropFilter: “blur(10px)”, zIndex: 300, display: “flex”, alignItems: “center”, justifyContent: “center”, padding: “1rem” }} onClick={onClose}>
+<div style={{ background: “#0d1530”, border: “1px solid rgba(100,130,200,0.2)”, borderRadius: 16, width: 580, maxWidth: “100%”, maxHeight: “92vh”, overflowY: “auto”, padding: “1.5rem” }} onClick={e => e.stopPropagation()}>
+{/* Header */}
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center”, marginBottom: “1.2rem” }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.2rem”, color: “#f0f4ff” }}>{exercise.name}</div>
+<button onClick={onClose} style={{ background: “none”, border: “none”, color: “#8fa3c0”, fontSize: “1.2rem”, cursor: “pointer” }}>✕</button>
+</div>
+<div style={{ display: “flex”, gap: 6, marginBottom: “1.2rem”, flexWrap: “wrap” }}>
+<Badge color="gold">{exercise.reps} عدات</Badge>
+<Badge color="blue">{exercise.sets} جولات</Badge>
+{exercise.sup && <Badge color="red">⚡ سوبر سيت</Badge>}
+{exercise.tech && <Badge color="purple">🔬 تكنيك متقدم</Badge>}
+</div>
+
+```
+      {/* VIDEO */}
+      <div style={{ ...S.card, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ ...S.cardTitle }}>🎬 فيديو التمرين</div>
+        {videoStore[key]
+          ? <div style={{ width: "100%", aspectRatio: "16/9", borderRadius: 8, overflow: "hidden", marginBottom: "0.8rem" }}><iframe src={videoStore[key]} style={{ width: "100%", height: "100%", border: "none" }} allowFullScreen title="exercise video" /></div>
+          : <div style={{ width: "100%", aspectRatio: "16/9", background: "rgba(13,21,48,0.8)", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: "0.8rem", border: "1px dashed rgba(100,130,200,0.2)" }}>
+              <div style={{ fontSize: "2.5rem" }}>🎬</div>
+              <div style={{ color: "#8fa3c0", fontSize: "0.85rem" }}>لا يوجد فيديو — أضف رابط يوتيوب</div>
+            </div>}
+        <div style={{ display: "flex", gap: 6 }}>
+          <Input value={urlInput} onChange={setUrlInput} placeholder="📎 ألصق رابط يوتيوب... (youtu.be/xxx)" style={{ flex: 1 }} />
+          <Btn onClick={handleSaveVideo} variant="primary" size="sm">تحميل</Btn>
+          {videoStore[key] && <Btn onClick={() => { onSaveVideo(key, null); setUrlInput(""); }} variant="danger" size="sm">مسح</Btn>}
+        </div>
+        <div style={{ marginTop: "0.6rem" }}>
+          <a href={`https://www.youtube.com/results?search_query=${exercise.ytq}`} target="_blank" rel="noreferrer"
+            style={{ color: "#93c5fd", fontSize: "0.78rem", textDecoration: "none" }}>🔍 بحث عن فيديو في يوتيوب ←</a>
+        </div>
+      </div>
+
+      {/* SETS TRACKER */}
+      <div style={{ ...S.card, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <div style={{ ...S.cardTitle, marginBottom: 0 }}>📊 تتبع الجولات</div>
+          <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: "1.4rem", color: "#e8c96a" }}>{state.completedSets}/{totalSets}</div>
+        </div>
+        {/* Set bubbles */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1rem" }}>
+          {Array.from({ length: totalSets }, (_, i) => {
+            const comp = i < state.completedSets;
+            const active = i === state.completedSets;
+            return (
+              <div key={i} onClick={() => onStateChange(key, { ...state, completedSets: i + 1, done: i + 1 >= totalSets })}
+                style={{ width: 48, height: 48, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Oswald',sans-serif", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", transition: "all .25s", userSelect: "none",
+                  background: comp ? "linear-gradient(135deg,#c9a84c,#e8c96a)" : active ? "rgba(34,197,94,0.15)" : "rgba(30,58,110,0.3)",
+                  border: comp ? "2px solid #e8c96a" : active ? "2px solid rgba(34,197,94,0.6)" : "2px solid rgba(100,130,200,0.25)",
+                  color: comp ? "#0a0f1e" : active ? "#4ade80" : "#8fa3c0",
+                  boxShadow: comp ? "0 0 12px rgba(201,168,76,0.35)" : "none",
+                }}>{comp ? "✓" : i + 1}</div>
+            );
+          })}
+        </div>
+        {/* Reps + Weight */}
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.8rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "#8fa3c0", fontSize: "0.85rem" }}>العدات:</span>
+            <button onClick={() => setReps(r => Math.max(1, r - 1))} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(30,58,110,0.4)", border: "1px solid rgba(100,130,200,0.2)", color: "#c8d4e8", cursor: "pointer", fontSize: "1rem" }}>−</button>
+            <span style={{ fontFamily: "'Oswald',sans-serif", fontSize: "1.3rem", color: "#f0f4ff", minWidth: 28, textAlign: "center" }}>{reps}</span>
+            <button onClick={() => setReps(r => Math.min(50, r + 1))} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(30,58,110,0.4)", border: "1px solid rgba(100,130,200,0.2)", color: "#c8d4e8", cursor: "pointer", fontSize: "1rem" }}>+</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "#8fa3c0", fontSize: "0.85rem" }}>الوزن:</span>
+            <input type="number" value={weight} onChange={e => setWeight(e.target.value)} placeholder="كجم" min="0" step="2.5"
+              style={{ width: 70, padding: "0.35rem 0.5rem", background: "rgba(30,58,110,0.25)", border: "1px solid rgba(100,130,200,0.22)", borderRadius: 6, color: "#f0f4ff", fontFamily: "'Cairo',sans-serif", fontSize: "0.88rem", outline: "none", textAlign: "center" }} />
+            <span style={{ color: "#8fa3c0", fontSize: "0.82rem" }}>كجم</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn onClick={logSet} variant="green" size="sm">✓ تسجيل جولة</Btn>
+          <Btn onClick={resetSets} variant="ghost" size="sm">↺ إعادة</Btn>
+        </div>
+        {/* Logs */}
+        {state.logs.length > 0 && (
+          <div style={{ marginTop: "0.8rem", maxHeight: 160, overflowY: "auto" }}>
+            <div style={{ color: "#8fa3c0", fontSize: "0.75rem", marginBottom: "0.4rem" }}>سجل الجولات:</div>
+            {state.logs.map((l, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: "1px solid rgba(100,130,200,0.07)", fontSize: "0.82rem" }}>
+                <span style={{ color: "#8fa3c0" }}>جولة {l.set}</span>
+                <span style={{ color: "#f0f4ff" }}>{l.reps} عدة</span>
+                <span style={{ color: "#e8c96a" }}>{l.weight} كجم</span>
+                <span style={{ color: "#8fa3c0", fontSize: "0.72rem" }}>{l.time}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* REST TIMER */}
+      <div style={{ ...S.card, padding: "1rem", marginBottom: "1rem" }}>
+        <div style={{ ...S.cardTitle, marginBottom: "0.8rem" }}>⏱ موقت الراحة</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: "0.8rem" }}>
+          {[30, 60, 90, 120, 180].map(s => (
+            <button key={s} onClick={() => setRestSecs(s)} style={{ padding: "0.3rem 0.8rem", borderRadius: 20, background: restSecs === s ? "rgba(201,168,76,0.18)" : "rgba(30,58,110,0.3)", border: `1px solid ${restSecs === s ? "rgba(201,168,76,0.45)" : "rgba(100,130,200,0.2)"}`, color: restSecs === s ? "#e8c96a" : "#8fa3c0", fontFamily: "'Cairo',sans-serif", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}>
+              {s < 60 ? `${s}ث` : `${s / 60}د`}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
+          {/* Ring */}
+          <div style={{ position: "relative", width: 100, height: 100, flexShrink: 0 }}>
+            <svg style={{ transform: "rotate(-90deg)" }} width="100" height="100" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(30,58,110,0.5)" strokeWidth="6" />
+              <circle cx="50" cy="50" r="46" fill="none" stroke={timerLeft <= 10 ? "#ef4444" : "#e8c96a"} strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: "stroke-dashoffset 0.9s linear, stroke .3s" }} />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: "1.5rem", fontWeight: 700, color: "#f0f4ff" }}>
+                {timerLeft >= 60 ? `${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}` : timerLeft}
+              </div>
+              <div style={{ fontSize: "0.6rem", color: "#8fa3c0" }}>ثانية</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: "0.5rem" }}>
+              <button onClick={startTimer} style={{ padding: "0.55rem 1.2rem", borderRadius: 8, background: "linear-gradient(135deg,#c9a84c,#e8c96a)", border: "none", color: "#0a0f1e", fontFamily: "'Cairo',sans-serif", fontSize: "0.9rem", fontWeight: 900, cursor: "pointer" }}>
+                {timerRunning ? "⏸ إيقاف" : "▶ ابدأ"}
+              </button>
+              <button onClick={resetTimerFn} style={{ padding: "0.55rem 0.9rem", borderRadius: 8, background: "rgba(100,130,200,0.1)", border: "1px solid rgba(100,130,200,0.2)", color: "#c8d4e8", cursor: "pointer" }}>↺</button>
+            </div>
+            {timerDone && <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "0.88rem" }}>✅ انتهت الراحة — جاهز!</div>}
+            {!timerDone && <div style={{ color: "#8fa3c0", fontSize: "0.75rem" }}>الراحة الموصى بها: 60–90 ثانية</div>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <Btn onClick={() => { onStateChange(key, { ...state, completedSets: totalSets, done: true }); onNotif("✅ تم تعليم التمرين كمكتمل!"); onClose(); }} variant="gold" size="sm">✅ إكمال التمرين</Btn>
+        <Btn onClick={onClose} variant="ghost" size="sm">إغلاق</Btn>
+      </div>
+    </div>
+  </div>
+</>
+```
+
+);
+};
+
+// ─── EXERCISE ITEM ROW ────────────────────────────────────────────────────────
+const ExItem = ({ ex, idx, dayNum, exState, videoStore, onClick }) => {
+const key = `${dayNum}_${idx}`;
+const st = exState[key] || {};
+const done = st.done;
+const comp = st.completedSets || 0;
+return (
+<div onClick={onClick} style={{ display: “flex”, alignItems: “center”, gap: “0.8rem”, padding: “0.9rem 1rem”, background: done ? “rgba(34,197,94,0.05)” : “rgba(30,58,110,0.13)”, border: `1px solid ${done ? "rgba(34,197,94,0.22)" : "rgba(100,130,200,0.1)"}`, borderRadius: 10, marginBottom: 8, cursor: “pointer”, transition: “all .25s”, position: “relative”, overflow: “hidden” }}>
+<div style={{ width: 36, height: 36, borderRadius: “50%”, background: done ? “linear-gradient(135deg,#16a34a,#22c55e)” : “linear-gradient(135deg,#1e3a6e,#2a4d8f)”, display: “flex”, alignItems: “center”, justifyContent: “center”, fontSize: “0.82rem”, fontWeight: 700, color: “#d8e4f4”, flexShrink: 0 }}>{done ? “✓” : idx + 1}</div>
+<div style={{ flex: 1, minWidth: 0 }}>
+<div style={{ fontWeight: 700, color: “#f0f4ff”, fontSize: “0.92rem”, marginBottom: 4 }}>{ex.name}</div>
+<div style={{ display: “flex”, gap: 5, flexWrap: “wrap” }}>
+<Badge color="gold">{ex.reps} عدات</Badge>
+<Badge color="blue">{ex.sets} جولات</Badge>
+{comp > 0 && !done && <Badge color="green">{comp}/{ex.sets} ✓</Badge>}
+{ex.sup && <Badge color="red">⚡ سوبر سيت</Badge>}
+{ex.tech && <Badge color="purple">🔬 تكنيك</Badge>}
+{videoStore[key] && <Badge color="orange">🎬 فيديو</Badge>}
+</div>
+</div>
+{done && <Badge color="green">✓ تم</Badge>}
+<div style={{ color: “#8fa3c0”, fontSize: “0.85rem”, flexShrink: 0 }}>‹</div>
+</div>
+);
+};
+
+// ─── PROGRAM TAB ──────────────────────────────────────────────────────────────
+const ProgramTab = ({ exState, setExState, videoStore, setVideoStore, onNotif }) => {
+const [day, setDay] = useState(1);
+const [openEx, setOpenEx] = useState(null);
+const prog = PROGRAM[day];
+const refProg = PROGRAM[prog.ref || day];
+const exList = prog.ref ? PROGRAM[prog.ref].exercises : prog.exercises;
+const realDay = prog.ref || day;
+const total = exList.length;
+const doneCount = exList.filter((_, i) => exState[`${realDay}_${i}`]?.done).length;
+
+return (
+<div>
+{openEx !== null && (
+<ExModal exercise={exList[openEx]} dayNum={realDay} exIdx={openEx}
+onClose={() => setOpenEx(null)} videoStore={videoStore}
+onSaveVideo={(k, v) => setVideoStore(vs => v ? { …vs, [k]: v } : Object.fromEntries(Object.entries(vs).filter(([x]) => x !== k)))}
+exState={exState} onStateChange={(k, s) => setExState(es => ({ …es, [k]: s }))}
+onNotif={onNotif} />
+)}
+{/* Day tabs */}
+<div style={{ display: “flex”, gap: 6, marginBottom: “1.2rem”, flexWrap: “wrap” }}>
+{[1, 2, 3, 4, 5].map(d => (
+<button key={d} onClick={() => setDay(d)} style={{ padding: “0.5rem 1.1rem”, borderRadius: 7, background: day === d ? “linear-gradient(135deg,#1e3a6e,#2a4d8f)” : “transparent”, border: `1px solid ${day === d ? "rgba(100,150,255,0.35)" : "rgba(100,130,200,0.18)"}`, color: day === d ? “#f0f4ff” : “#8fa3c0”, fontFamily: “‘Cairo’,sans-serif”, fontWeight: 700, fontSize: “0.85rem”, cursor: “pointer” }}>اليوم {d}</button>
+))}
+</div>
+{/* Day header */}
+<div style={{ display: “flex”, alignItems: “center”, gap: “1rem”, padding: “1.1rem”, background: “linear-gradient(135deg,#1e3a6e,#111d3a)”, border: “1px solid rgba(100,130,200,0.15)”, borderRadius: 10, marginBottom: “1rem” }}>
+<span style={{ fontSize: “1.8rem” }}>{refProg.icon}</span>
+<div style={{ flex: 1 }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.1rem”, color: “#f0f4ff” }}>{refProg.title}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.82rem” }}>{refProg.sub}</div>
+{prog.note && <div style={{ color: “#e8c96a”, fontSize: “0.8rem”, marginTop: 3 }}>💡 {prog.note}</div>}
+</div>
+<div style={{ textAlign: “center” }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.5rem”, color: doneCount === total ? “#4ade80” : “#e8c96a” }}>{doneCount}/{total}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.7rem” }}>تمارين</div>
+</div>
+</div>
+{/* Progress */}
+<div style={{ marginBottom: “1rem” }}>
+<div style={{ display: “flex”, justifyContent: “space-between”, fontSize: “0.78rem”, color: “#8fa3c0”, marginBottom: 4 }}><span>التقدم</span><span>{Math.round(doneCount / total * 100)}%</span></div>
+<div style={{ background: “rgba(30,58,110,0.35)”, borderRadius: 10, height: 8, overflow: “hidden” }}>
+<div style={{ height: “100%”, borderRadius: 10, background: “linear-gradient(90deg,#c9a84c,#e8c96a)”, width: `${doneCount / total * 100}%`, transition: “width .8s ease” }} />
+</div>
+</div>
+{/* Exercises */}
+{exList.map((e, i) => (
+<ExItem key={i} ex={e} idx={i} dayNum={realDay} exState={exState} videoStore={videoStore} onClick={() => setOpenEx(i)} />
+))}
+<div style={{ textAlign: “center”, padding: “0.8rem 0”, color: “#8fa3c0”, fontSize: “0.8rem” }}>💡 اضغط على أي تمرين للتفاصيل والفيديو وتتبع الجولات</div>
+</div>
+);
+};
+
+// ─── ADMIN — VIDEO MGMT ───────────────────────────────────────────────────────
+const AdminVideos = ({ videoStore, setVideoStore, onNotif }) => {
+const [selDay, setSelDay] = useState(1);
+const [inputs, setInputs] = useState({});
+const prog = PROGRAM[selDay];
+const exList = prog.exercises;
+return (
+<div>
+<div style={{ marginBottom: “1.2rem” }}>
+<label style={{ color: “#8fa3c0”, fontSize: “0.82rem”, display: “block”, marginBottom: 6 }}>اختر اليوم</label>
+<select value={selDay} onChange={e => setSelDay(Number(e.target.value))}
+style={{ padding: “0.65rem 1rem”, background: “rgba(30,58,110,0.25)”, border: “1px solid rgba(100,130,200,0.22)”, borderRadius: 8, color: “#f0f4ff”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “0.9rem”, outline: “none” }}>
+<option value={1}>اليوم الأول — عضلات الدفع</option>
+<option value={2}>اليوم الثاني — عضلات السحب</option>
+<option value={3}>اليوم الثالث — عضلات الأرجل</option>
+</select>
+</div>
+{exList.map((e, i) => {
+const key = `${selDay}_${i}`;
+const hasVid = !!videoStore[key];
+return (
+<div key={i} style={{ display: “flex”, alignItems: “center”, gap: “1rem”, padding: “0.9rem”, background: “rgba(30,58,110,0.13)”, border: `1px solid ${hasVid ? "rgba(34,197,94,0.2)" : "rgba(100,130,200,0.1)"}`, borderRadius: 10, marginBottom: 8, flexWrap: “wrap” }}>
+<div style={{ width: 88, height: 56, borderRadius: 6, background: “#000”, overflow: “hidden”, flexShrink: 0, display: “flex”, alignItems: “center”, justifyContent: “center”, color: “#8fa3c0”, fontSize: “0.7rem” }}>
+{hasVid ? <iframe src={videoStore[key]} style={{ width: “100%”, height: “100%”, border: “none”, pointerEvents: “none” }} title=“thumb” /> : “🎬”}
+</div>
+<div style={{ flex: 1, minWidth: 160 }}>
+<div style={{ fontWeight: 700, color: “#f0f4ff”, fontSize: “0.88rem” }}>{e.name}</div>
+<div style={{ color: hasVid ? “#4ade80” : “#8fa3c0”, fontSize: “0.75rem”, marginTop: 2 }}>{hasVid ? “✅ يوجد فيديو” : “⚪ لا يوجد فيديو”}</div>
+</div>
+<div style={{ display: “flex”, flexDirection: “column”, gap: 6, minWidth: 200 }}>
+<Input value={inputs[key] !== undefined ? inputs[key] : fromEmbed(videoStore[key] || “”)}
+onChange={v => setInputs(x => ({ …x, [key]: v }))} placeholder=“رابط يوتيوب…” />
+<div style={{ display: “flex”, gap: 6 }}>
+<Btn size=“sm” variant=“primary” onClick={() => {
+const url = inputs[key] !== undefined ? inputs[key] : fromEmbed(videoStore[key] || “”);
+const embed = toEmbed(url);
+if (!embed) { onNotif(“❌ رابط غير صالح”, “error”); return; }
+setVideoStore(vs => ({ …vs, [key]: embed }));
+onNotif(“✅ تم حفظ الفيديو”);
+}}>حفظ</Btn>
+{hasVid && <Btn size=“sm” variant=“danger” onClick={() => { setVideoStore(vs => Object.fromEntries(Object.entries(vs).filter(([x]) => x !== key))); onNotif(“🗑 تم حذف الفيديو”); }}>حذف</Btn>}
+</div>
+</div>
+</div>
+);
+})}
+</div>
+);
+};
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+const [db, setDb] = useState(INIT_DB);
+const [page, setPage] = useState(“login”); // login | admin | member
+const [currentUser, setCurrentUser] = useState(null);
+const [currentMemberId, setCurrentMemberId] = useState(null);
+const [adminTab, setAdminTab] = useState(“overview”);
+const [memberTab, setMemberTab] = useState(“home”);
+const [loginUser, setLoginUser] = useState(””);
+const [loginPass, setLoginPass] = useState(””);
+const [loginErr, setLoginErr] = useState(false);
+const [notif, setNotif] = useState({ msg: “”, visible: false, type: “success” });
+const [videoStore, setVideoStore] = useState({});
+const [exState, setExState] = useState({});
+const [selectedMemberId, setSelectedMemberId] = useState(null);
+const [progDay, setProgDay] = useState(1);
+// add member form
+const [newMember, setNewMember] = useState({ name: “”, user: “”, pass: “”, phone: “”, age: “”, weight: “”, height: “”, goal: “بناء عضلات”, notes: “” });
+// challenge form
+const [newCh, setNewCh] = useState({ icon: “🎯”, title: “”, desc: “”, points: “300” });
+const notifTimer = useRef(null);
+
+const showNotif = useCallback((msg, type = “success”) => {
+setNotif({ msg, visible: true, type });
+clearTimeout(notifTimer.current);
+notifTimer.current = setTimeout(() => setNotif(n => ({ …n, visible: false })), 3400);
+}, []);
+
+// ── AUTH
+const doLogin = () => {
+const u = db.users[loginUser];
+if (u && u.pass === loginPass) {
+setLoginErr(false); setCurrentUser(loginUser);
+if (u.role === “admin”) { setPage(“admin”); setAdminTab(“overview”); }
+else { setCurrentMemberId(u.id); setPage(“member”); setMemberTab(“home”); }
+} else { setLoginErr(true); setLoginPass(””); }
+};
+const doLogout = () => { setPage(“login”); setCurrentUser(null); setCurrentMemberId(null); setLoginUser(””); setLoginPass(””); };
+
+// ── ADMIN ACTIONS
+const addMember = () => {
+if (!newMember.name || !newMember.user || !newMember.pass) { showNotif(“⚠️ الرجاء تعبئة الاسم واليوزر وكلمة المرور”, “error”); return; }
+if (db.users[newMember.user]) { showNotif(“❌ اسم المستخدم موجود مسبقاً”, “error”); return; }
+const id = “m” + Date.now();
+setDb(d => ({
+…d,
+users: { …d.users, [newMember.user]: { pass: newMember.pass, role: “member”, id } },
+members: { …d.members, [id]: { id, username: newMember.user, name: newMember.name, phone: newMember.phone || “—”, age: newMember.age || “—”, weight: newMember.weight || “—”, height: newMember.height || “—”, goal: newMember.goal, notes: newMember.notes, points: 0, streak: 0, status: “active”, joined: new Date().toISOString().split(“T”)[0], attendance: Array(7).fill(“upcoming”), challenges: [], badges: [] } },
+}));
+setNewMember({ name: “”, user: “”, pass: “”, phone: “”, age: “”, weight: “”, height: “”, goal: “بناء عضلات”, notes: “” });
+showNotif(`✅ تم إضافة ${newMember.name} بنجاح`);
+setAdminTab(“members”);
+};
+const toggleStatus = (id) => {
+setDb(d => ({ …d, members: { …d.members, [id]: { …d.members[id], status: d.members[id].status === “active” ? “inactive” : “active” } } }));
+showNotif(“تم تغيير الحالة”);
+};
+const deleteMember = (id) => {
+const m = db.members[id];
+setDb(d => { const { [id]: *, …members } = d.members; const { [m.username]: __, …users } = d.users; return { …d, members, users }; });
+setSelectedMemberId(null);
+showNotif(“🗑 تم حذف المشترك”);
+};
+const addChallenge = () => {
+if (!newCh.title) { showNotif(“⚠️ أدخل عنوان التحدي”, “error”); return; }
+const id = db.challenges.length;
+setDb(d => ({ …d, challenges: […d.challenges, { id, icon: newCh.icon || “🎯”, title: newCh.title, desc: newCh.desc, points: parseInt(newCh.points) || 300 }] }));
+setNewCh({ icon: “🎯”, title: “”, desc: “”, points: “300” });
+showNotif(“✅ تم إضافة التحدي”);
+};
+const deleteChallenge = (idx) => { setDb(d => ({ …d, challenges: d.challenges.filter((*, i) => i !== idx) })); showNotif(“🗑 تم حذف التحدي”); };
+
+// ── MEMBER ACTIONS
+const completeChallenge = (mid, cid) => {
+const m = db.members[mid];
+if ((m.challenges || []).includes(cid)) { showNotif(“✅ هذا التحدي مكتمل”); return; }
+const ch = db.challenges.find(c => c.id === cid);
+const pts = ch?.points || 300;
+const badgeMap = { 0: “🔥 الثبات”, 1: “💪 القوة”, 2: “⚡ الدقة”, 3: “🦵 الأرجل” };
+const newBadges = badgeMap[cid] && !m.badges.includes(badgeMap[cid]) ? […m.badges, badgeMap[cid]] : m.badges;
+setDb(d => ({ …d, members: { …d.members, [mid]: { …d.members[mid], challenges: […(d.members[mid].challenges || []), cid], points: d.members[mid].points + pts, badges: newBadges } } }));
+showNotif(`🎉 رائع! حصلت على +${pts} نقطة!`);
+};
+
+const members = Object.values(db.members);
+const sortedMembers = […members].sort((a, b) => b.points - a.points);
+const medals = [“🥇”, “🥈”, “🥉”];
+const currentMember = currentMemberId ? db.members[currentMemberId] : null;
+
+// ─── RENDER ───────────────────────────────────────────────────────────────
+const renderAdminOverview = () => (
+<div>
+<div style={{ display: “grid”, gridTemplateColumns: “repeat(auto-fit,minmax(140px,1fr))”, gap: “1rem”, marginBottom: “1.5rem” }}>
+{[[“👥”, members.length, “المشتركين”], [“✅”, members.filter(m => m.status === “active”).length, “نشطون”],
+[“🔥”, Math.round(members.reduce((s, m) => s + m.streak, 0) / members.length || 0), “متوسط الاستمرارية”],
+[“⭐”, (members.reduce((s, m) => s + m.points, 0) / 1000).toFixed(1) + “K”, “إجمالي النقاط”],
+[“🎯”, db.challenges.length, “تحديات”]].map(([icon, num, lbl]) => (
+<div key={lbl} style={{ background: “rgba(13,21,48,0.85)”, border: “1px solid rgba(100,130,200,0.12)”, borderRadius: 12, padding: “1.2rem”, textAlign: “center” }}>
+<div style={{ fontSize: “1.6rem” }}>{icon}</div>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.8rem”, background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” }}>{num}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.75rem” }}>{lbl}</div>
+</div>
+))}
+</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “1.2rem” }}>
+<div style={S.card}>
+<div style={S.cardTitle}>🔥 المشتركون النشطون</div>
+{members.map(m => (
+<div key={m.id} style={{ display: “flex”, alignItems: “center”, gap: “0.7rem”, padding: “0.6rem 0”, borderBottom: “1px solid rgba(100,130,200,0.07)” }}>
+<Avatar letter={m.name[0]} size={30} />
+<div style={{ flex: 1 }}><div style={{ color: “#f0f4ff”, fontSize: “0.88rem” }}>{m.name}</div><div style={{ color: “#8fa3c0”, fontSize: “0.72rem” }}>🔥 {m.streak} يوم</div></div>
+<Badge color={m.status === “active” ? “green” : “red”}>{m.status === “active” ? “نشط” : “موقوف”}</Badge>
+</div>
+))}
+</div>
+<div style={S.card}>
+<div style={S.cardTitle}>⚠️ تنبيهات</div>
+{members.filter(m => m.streak < 15).length === 0
+? <div style={{ color: “#8fa3c0”, fontSize: “0.88rem” }}>✅ جميع المشتركين ممتازون!</div>
+: members.filter(m => m.streak < 15).map(m => (
+<div key={m.id} style={{ display: “flex”, alignItems: “center”, gap: “0.7rem”, padding: “0.6rem 0”, borderBottom: “1px solid rgba(100,130,200,0.07)” }}>
+<span>⚠️</span>
+<div style={{ flex: 1 }}><div style={{ color: “#f0f4ff”, fontSize: “0.88rem” }}>{m.name}</div><div style={{ color: “#fca5a5”, fontSize: “0.72rem” }}>استمرارية منخفضة — {m.streak} يوم</div></div>
+<Btn size=“sm” variant=“primary” onClick={() => setSelectedMemberId(m.id)}>عرض</Btn>
+</div>
+))}
+</div>
+</div>
+</div>
+);
+
+const renderMembersTable = () => (
+<div>
+<div style={{ overflowX: “auto”, borderRadius: 10, border: “1px solid rgba(100,130,200,0.12)” }}>
+<table style={{ width: “100%”, borderCollapse: “collapse” }}>
+<thead><tr style={{ background: “rgba(30,58,110,0.4)” }}>
+{[“المشترك”, “اليوزر”, “الحالة”, “النقاط”, “الاستمرارية”, “إجراءات”].map(h => (
+<th key={h} style={{ padding: “0.8rem 0.9rem”, textAlign: “right”, fontSize: “0.77rem”, fontWeight: 700, color: “#8fa3c0”, whiteSpace: “nowrap” }}>{h}</th>
+))}
+</tr></thead>
+<tbody>
+{members.map(m => (
+<tr key={m.id} style={{ borderBottom: “1px solid rgba(100,130,200,0.07)” }}>
+<td style={{ padding: “0.8rem 0.9rem” }}><div style={{ display: “flex”, alignItems: “center”, gap: 8 }}><Avatar letter={m.name[0]} size={30} /><span style={{ color: “#f0f4ff”, fontSize: “0.88rem” }}>{m.name}</span></div></td>
+<td style={{ padding: “0.8rem 0.9rem”, color: “#8fa3c0”, fontSize: “0.85rem” }}>@{m.username}</td>
+<td style={{ padding: “0.8rem 0.9rem” }}><Badge color={m.status === “active” ? “green” : “red”}>{m.status === “active” ? “نشط” : “موقوف”}</Badge></td>
+<td style={{ padding: “0.8rem 0.9rem”, fontFamily: “‘Oswald’,sans-serif”, color: “#e8c96a” }}>{m.points.toLocaleString(“ar-SA”)}</td>
+<td style={{ padding: “0.8rem 0.9rem”, color: “#f97316” }}>🔥 {m.streak}</td>
+<td style={{ padding: “0.8rem 0.9rem” }}><div style={{ display: “flex”, gap: 5 }}>
+<Btn size=“sm” variant=“primary” onClick={() => setSelectedMemberId(m.id)}>عرض</Btn>
+<Btn size=“sm” variant={m.status === “active” ? “danger” : “ghost”} onClick={() => toggleStatus(m.id)}>{m.status === “active” ? “إيقاف” : “تفعيل”}</Btn>
+</div></td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+{/* Member detail panel */}
+{selectedMemberId && (() => {
+const m = db.members[selectedMemberId];
+if (!m) return null;
+const days = [“أح”,“إث”,“ثل”,“أر”,“خم”,“جم”,“سب”];
+return (
+<div style={{ …S.card, marginTop: “1.2rem” }}>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center”, marginBottom: “1rem” }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.1rem”, color: “#f0f4ff” }}>تفاصيل: {m.name}</div>
+<button onClick={() => setSelectedMemberId(null)} style={{ background: “none”, border: “none”, color: “#8fa3c0”, fontSize: “1.1rem”, cursor: “pointer” }}>✕</button>
+</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “0.8rem”, marginBottom: “1rem” }}>
+{[[“الهدف”, m.goal], [“العمر / الوزن / الطول”, `${m.age} — ${m.weight} كجم — ${m.height} سم`], [“الاستمرارية”, `🔥 ${m.streak} يوم`], [“الجوال”, m.phone]].map(([l, v]) => (
+<div key={l} style={{ padding: “0.7rem”, background: “rgba(30,58,110,0.22)”, borderRadius: 8 }}>
+<div style={{ color: “#8fa3c0”, fontSize: “0.72rem” }}>{l}</div>
+<div style={{ color: “#f0f4ff”, fontWeight: 700, marginTop: 2, fontSize: “0.85rem” }}>{v}</div>
+</div>
+))}
+</div>
+<div style={{ marginBottom: “0.8rem” }}>
+<div style={{ color: “#8fa3c0”, fontSize: “0.75rem”, marginBottom: 5 }}>حضور هذا الأسبوع</div>
+<div style={{ display: “flex”, gap: 5 }}>
+{(m.attendance || []).map((d, i) => (
+<div key={i} style={{ width: 32, height: 32, borderRadius: 6, display: “flex”, alignItems: “center”, justifyContent: “center”, fontSize: “0.68rem”, fontWeight: 700, background: d === “done” ? “linear-gradient(135deg,#c9a84c,#e8c96a)” : d === “miss” ? “rgba(239,68,68,0.15)” : d === “today” ? “rgba(100,150,255,0.2)” : “rgba(100,130,200,0.1)”, border: d === “today” ? “2px solid rgba(100,150,255,0.5)” : “none”, color: d === “done” ? “#0a0f1e” : d === “miss” ? “#f87171” : d === “today” ? “#93c5fd” : “#8fa3c0” }} title={days[i]}>{d === “done” ? “✓” : d === “miss” ? “✗” : d === “today” ? “●” : “—”}</div>
+))}
+</div>
+</div>
+<div style={{ marginBottom: “0.8rem” }}>
+<div style={{ color: “#8fa3c0”, fontSize: “0.75rem”, marginBottom: 4 }}>الملاحظات</div>
+<div style={{ color: “#c8d4e8”, fontSize: “0.85rem”, lineHeight: 1.7 }}>{m.notes || “لا توجد ملاحظات”}</div>
+</div>
+<div style={{ display: “flex”, gap: 8 }}>
+<Btn size=“sm” variant=“danger” onClick={() => deleteMember(selectedMemberId)}>🗑 حذف المشترك</Btn>
+</div>
+</div>
+);
+})()}
+</div>
+);
+
+const renderAddMember = () => (
+<div style={{ …S.card, maxWidth: 560 }}>
+<div style={S.cardTitle}>➕ إضافة مشترك جديد</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “0.8rem” }}>
+{[[“الاسم الكامل *”, “name”, “text”, “خالد العتيبي”], [“اسم المستخدم *”, “user”, “text”, “khalid1”], [“كلمة المرور *”, “pass”, “password”, “••••••••”], [“رقم الجوال”, “phone”, “text”, “05xxxxxxxx”], [“العمر”, “age”, “number”, “25”], [“الوزن (كجم)”, “weight”, “number”, “80”], [“الطول (سم)”, “height”, “number”, “175”]].map(([label, field, type, ph]) => (
+<div key={field}>
+<label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 5, fontWeight: 700 }}>{label}</label>
+<Input value={newMember[field]} onChange={v => setNewMember(nm => ({ …nm, [field]: v }))} placeholder={ph} type={type} />
+</div>
+))}
+<div>
+<label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 5, fontWeight: 700 }}>الهدف</label>
+<select value={newMember.goal} onChange={e => setNewMember(nm => ({ …nm, goal: e.target.value }))}
+style={{ width: “100%”, padding: “0.7rem 0.9rem”, background: “rgba(30,58,110,0.22)”, border: “1px solid rgba(100,130,200,0.22)”, borderRadius: 8, color: “#f0f4ff”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “0.9rem”, outline: “none” }}>
+{[“بناء عضلات”, “خسارة وزن”, “تحسين اللياقة”, “المنافسة”].map(g => <option key={g}>{g}</option>)}
+</select>
+</div>
+</div>
+<div style={{ marginTop: “0.8rem” }}>
+<label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 5, fontWeight: 700 }}>ملاحظات المدرب</label>
+<textarea value={newMember.notes} onChange={e => setNewMember(nm => ({ …nm, notes: e.target.value }))} rows={3} placeholder=“ملاحظات خاصة…”
+style={{ width: “100%”, padding: “0.7rem 0.9rem”, background: “rgba(30,58,110,0.22)”, border: “1px solid rgba(100,130,200,0.22)”, borderRadius: 8, color: “#f0f4ff”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “0.9rem”, outline: “none”, resize: “vertical” }} />
+</div>
+<Btn onClick={addMember} variant=“gold” style={{ width: “100%”, justifyContent: “center”, marginTop: “0.8rem”, padding: “0.9rem”, fontSize: “0.95rem” }}>إضافة المشترك ✅</Btn>
+</div>
+);
+
+const renderChallengesAdmin = () => (
+<div>
+<div style={{ …S.card, marginBottom: “1.2rem”, maxWidth: 500 }}>
+<div style={S.cardTitle}>➕ إضافة تحدي جديد</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “0.8rem”, marginBottom: “0.8rem” }}>
+<div><label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 4, fontWeight: 700 }}>الأيكون</label><Input value={newCh.icon} onChange={v => setNewCh(c => ({ …c, icon: v }))} placeholder=“🎯” /></div>
+<div><label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 4, fontWeight: 700 }}>النقاط</label><Input value={newCh.points} onChange={v => setNewCh(c => ({ …c, points: v }))} type=“number” placeholder=“300” /></div>
+</div>
+<div style={{ marginBottom: “0.8rem” }}><label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 4, fontWeight: 700 }}>العنوان</label><Input value={newCh.title} onChange={v => setNewCh(c => ({ …c, title: v }))} placeholder=“عنوان التحدي…” /></div>
+<div style={{ marginBottom: “0.8rem” }}><label style={{ display: “block”, fontSize: “0.8rem”, color: “#8fa3c0”, marginBottom: 4, fontWeight: 700 }}>الوصف</label><Input value={newCh.desc} onChange={v => setNewCh(c => ({ …c, desc: v }))} placeholder=“وصف التحدي…” /></div>
+<Btn onClick={addChallenge} variant="gold" size="sm">إضافة التحدي</Btn>
+</div>
+{db.challenges.map((c, i) => (
+<div key={i} style={{ …S.card, marginBottom: “0.8rem” }}>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “flex-start”, flexWrap: “wrap”, gap: “0.8rem” }}>
+<div>
+<div style={{ fontWeight: 700, color: “#f0f4ff”, fontSize: “0.95rem” }}>{c.icon} {c.title}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.82rem”, marginTop: 3 }}>{c.desc}</div>
+<div style={{ color: “#e8c96a”, fontSize: “0.8rem”, marginTop: 5 }}>🏆 {c.points} نقطة — المكتملون: {members.filter(m => (m.challenges || []).includes(c.id)).length}/{members.length}</div>
+</div>
+<Btn size=“sm” variant=“danger” onClick={() => deleteChallenge(i)}>حذف</Btn>
+</div>
+</div>
+))}
+</div>
+);
+
+const renderLeaderboard = (highlightId = null) => (
+<div style={{ overflowX: “auto”, borderRadius: 10, border: “1px solid rgba(100,130,200,0.12)” }}>
+<table style={{ width: “100%”, borderCollapse: “collapse” }}>
+<thead><tr style={{ background: “rgba(30,58,110,0.4)” }}>
+{[“المركز”, “المشترك”, “النقاط”, “الاستمرارية”, “التحديات”].map(h => <th key={h} style={{ padding: “0.8rem 0.9rem”, textAlign: “right”, fontSize: “0.77rem”, fontWeight: 700, color: “#8fa3c0” }}>{h}</th>)}
+</tr></thead>
+<tbody>
+{sortedMembers.map((m, i) => (
+<tr key={m.id} style={{ borderBottom: “1px solid rgba(100,130,200,0.07)”, background: m.id === highlightId ? “rgba(201,168,76,0.05)” : “transparent” }}>
+<td style={{ padding: “0.8rem 0.9rem”, fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.1rem” }}>{medals[i] || i + 1}</td>
+<td style={{ padding: “0.8rem 0.9rem” }}><div style={{ display: “flex”, alignItems: “center”, gap: 7 }}><Avatar letter={m.name[0]} size={28} gold={m.id === highlightId} />{m.name}{m.id === highlightId && <Badge color="gold">أنت</Badge>}</div></td>
+<td style={{ padding: “0.8rem 0.9rem”, fontFamily: “‘Oswald’,sans-serif”, color: “#e8c96a” }}>{m.points.toLocaleString(“ar-SA”)}</td>
+<td style={{ padding: “0.8rem 0.9rem”, color: “#f97316” }}>🔥 {m.streak}</td>
+<td style={{ padding: “0.8rem 0.9rem” }}><Badge color="blue">{(m.challenges || []).length} تحدي</Badge></td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+);
+
+// ── MEMBER VIEWS
+const renderMemberHome = () => {
+const m = currentMember;
+const rank = sortedMembers.findIndex(x => x.id === m.id) + 1;
+const days = [“أح”,“إث”,“ثل”,“أر”,“خم”,“جم”,“سب”];
+return (
+<div>
+<div style={{ background: “linear-gradient(135deg,#1e3a6e,#111d3a)”, border: “1px solid rgba(100,130,200,0.15)”, borderRadius: 16, padding: “1.5rem”, marginBottom: “1.2rem”, position: “relative”, overflow: “hidden” }}>
+<div style={{ position: “absolute”, left: “1rem”, top: “50%”, transform: “translateY(-50%)”, fontSize: “5rem”, opacity: 0.05, pointerEvents: “none” }}>💪</div>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.6rem”, color: “#f0f4ff” }}>أهلاً، <span style={{ background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” }}>{m.name.split(” “)[0]}</span>! 🔥</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.88rem”, marginTop: 4 }}>استمر في التدريب — القمة تنتظرك</div>
+<div style={{ display: “flex”, gap: “2rem”, marginTop: “1.2rem”, flexWrap: “wrap” }}>
+{[[m.points.toLocaleString(“ar-SA”), “نقطة”, “#e8c96a”], [`🔥 ${m.streak}`, “يوم متتالي”, “#f97316”], [`${(m.challenges || []).length}/${db.challenges.length}`, “تحديات”, “#4ade80”], [`#${rank}`, “ترتيبك”, “#93c5fd”]].map(([n, l, c]) => (
+<div key={l}><div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.5rem”, color: c }}>{n}</div><div style={{ color: “#8fa3c0”, fontSize: “0.75rem” }}>{l}</div></div>
+))}
+</div>
+</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “1.2rem”, marginBottom: “1.2rem” }}>
+<div style={S.card}>
+<div style={S.cardTitle}>📅 حضور هذا الأسبوع</div>
+<div style={{ display: “flex”, gap: 5, flexWrap: “wrap” }}>
+{(m.attendance || []).map((d, i) => (
+<div key={i} title={days[i]} style={{ width: 32, height: 32, borderRadius: 6, display: “flex”, alignItems: “center”, justifyContent: “center”, fontSize: “0.68rem”, fontWeight: 700, background: d === “done” ? “linear-gradient(135deg,#c9a84c,#e8c96a)” : d === “miss” ? “rgba(239,68,68,0.15)” : d === “today” ? “rgba(100,150,255,0.2)” : “rgba(100,130,200,0.1)”, border: d === “today” ? “2px solid rgba(100,150,255,0.5)” : “none”, color: d === “done” ? “#0a0f1e” : d === “miss” ? “#f87171” : d === “today” ? “#93c5fd” : “#8fa3c0” }}>{d === “done” ? “✓” : d === “miss” ? “✗” : d === “today” ? “●” : “—”}</div>
+))}
+</div>
+</div>
+<div style={S.card}>
+<div style={S.cardTitle}>⭐ نقاطي الكلية</div>
+<div style={{ textAlign: “center”, padding: “0.5rem 0” }}>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “2.8rem”, background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” }}>{m.points.toLocaleString(“ar-SA”)}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.82rem” }}>نقطة مكتسبة</div>
+</div>
+</div>
+</div>
+<div style={S.card}>
+<div style={S.cardTitle}>⚡ تمرين اليوم — اضغط على تمرين للتفاصيل</div>
+<ProgramTab exState={exState} setExState={setExState} videoStore={videoStore} setVideoStore={setVideoStore} onNotif={showNotif} />
+</div>
+</div>
+);
+};
+
+const renderMemberChallenges = () => {
+const m = currentMember;
+return (
+<div>
+<h2 style={{ fontFamily: “‘Oswald’,sans-serif”, color: “#f0f4ff”, marginBottom: “1.2rem” }}>🎯 تحديات هذا الأسبوع</h2>
+{db.challenges.map(c => {
+const done = (m.challenges || []).includes(c.id);
+return (
+<div key={c.id} style={{ …S.card, borderColor: done ? “rgba(34,197,94,0.22)” : “rgba(100,130,200,0.12)” }}>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “flex-start”, flexWrap: “wrap”, gap: “0.8rem” }}>
+<div>
+<div style={{ fontWeight: 700, color: “#f0f4ff” }}>{c.icon} {c.title} {done && <Badge color="green">✓ مكتمل</Badge>}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.85rem”, marginTop: 4 }}>{c.desc}</div>
+<div style={{ color: “#e8c96a”, fontSize: “0.8rem”, marginTop: 5 }}>🏆 +{c.points} نقطة</div>
+</div>
+{!done ? <Btn size=“sm” variant=“gold” onClick={() => completeChallenge(m.id, c.id)}>إكمال ✓</Btn> : <span style={{ fontSize: “1.4rem” }}>🏅</span>}
+</div>
+</div>
+);
+})}
+</div>
+);
+};
+
+const renderMemberProfile = () => {
+const m = currentMember;
+return (
+<div>
+<div style={{ background: “linear-gradient(135deg,#1e3a6e,#111d3a)”, border: “1px solid rgba(100,130,200,0.15)”, borderRadius: 12, padding: “1.5rem”, display: “flex”, alignItems: “center”, gap: “1.2rem”, marginBottom: “1.2rem”, flexWrap: “wrap” }}>
+<div style={{ width: 72, height: 72, borderRadius: “50%”, background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, display: “flex”, alignItems: “center”, justifyContent: “center”, fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.8rem”, fontWeight: 700, color: “#0a0f1e”, border: “3px solid rgba(201,168,76,0.4)”, flexShrink: 0 }}>{m.name[0]}</div>
+<div>
+<div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.4rem”, color: “#f0f4ff” }}>{m.name}</div>
+<div style={{ color: “#8fa3c0”, fontSize: “0.82rem” }}>@{m.username} — انضم {m.joined}</div>
+<div style={{ display: “flex”, gap: “1.5rem”, marginTop: “0.8rem”, flexWrap: “wrap” }}>
+{[[m.points.toLocaleString(“ar-SA”), “نقطة”, “#e8c96a”], [`🔥 ${m.streak}`, “يوم”, “#f97316”], [(m.badges || []).length, “شارة”, “#4ade80”]].map(([n, l, c]) => (
+<div key={l}><div style={{ fontFamily: “‘Oswald’,sans-serif”, fontSize: “1.3rem”, color: c }}>{n}</div><div style={{ color: “#8fa3c0”, fontSize: “0.72rem” }}>{l}</div></div>
+))}
+</div>
+</div>
+</div>
+<div style={{ display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: “1.2rem” }}>
+<div style={S.card}>
+<div style={S.cardTitle}>📋 بياناتي</div>
+{[[“الهدف”, m.goal], [“العمر”, m.age + “ سنة”], [“الوزن”, m.weight + “ كجم”], [“الطول”, m.height + “ سم”], [“الجوال”, m.phone]].map(([l, v]) => (
+<div key={l} style={{ display: “flex”, justifyContent: “space-between”, padding: “0.6rem 0”, borderBottom: “1px solid rgba(100,130,200,0.07)”, fontSize: “0.88rem” }}>
+<span style={{ color: “#8fa3c0” }}>{l}</span><span style={{ color: “#f0f4ff”, fontWeight: 700 }}>{v || “—”}</span>
+</div>
+))}
+</div>
+<div style={S.card}>
+<div style={S.cardTitle}>🏅 شاراتي</div>
+{(m.badges || []).length
+? <div style={{ display: “flex”, flexWrap: “wrap”, gap: 6 }}>{m.badges.map(b => <Badge key={b} color="gold">{b}</Badge>)}</div>
+: <div style={{ color: “#8fa3c0”, fontSize: “0.85rem” }}>أكمل التحديات للحصول على شارات! 🏅</div>}
+</div>
+</div>
+</div>
+);
+};
+
+// ── NAV TABS
+const NavTabs = ({ tabs, active, onSelect }) => (
+<div style={S.tabsNav}>
+{tabs.map(([id, label]) => (
+<button key={id} onClick={() => onSelect(id)} style={{ padding: “0.55rem 1.1rem”, borderRadius: 6, background: active === id ? “linear-gradient(135deg,#1e3a6e,#2a4d8f)” : “transparent”, border: `1px solid ${active === id ? "rgba(100,150,255,0.3)" : "transparent"}`, color: active === id ? “#f0f4ff” : “#8fa3c0”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “0.85rem”, fontWeight: 700, cursor: “pointer”, whiteSpace: “nowrap” }}>{label}</button>
+))}
+</div>
+);
+
+// ── LOGIN PAGE
+if (page === “login”) return (
+<div style={S.app}>
+<Notif {…notif} />
+<div style={S.loginWrap}>
+<div style={S.loginBox}>
+<div style={{ textAlign: “center”, marginBottom: “1.5rem”, fontFamily: “‘Oswald’,sans-serif”, fontSize: “2rem”, fontWeight: 700, letterSpacing: 4, background: “linear-gradient(135deg,#d8e4f4,#e8c96a)”, WebkitBackgroundClip: “text”, WebkitTextFillColor: “transparent” }}>⚡ IRON ELITE</div>
+<div style={{ textAlign: “center”, color: “#8fa3c0”, fontSize: “0.85rem”, marginBottom: “1.5rem” }}>منصة التدريب المتقدم لكمال الأجسام</div>
+{loginErr && <div style={{ background: “rgba(239,68,68,0.1)”, border: “1px solid rgba(239,68,68,0.3)”, color: “#fca5a5”, borderRadius: 8, padding: “0.75rem”, fontSize: “0.85rem”, textAlign: “center”, marginBottom: “1rem” }}>اسم المستخدم أو كلمة المرور غير صحيحة</div>}
+<div style={{ marginBottom: “1rem” }}>
+<label style={{ display: “block”, fontSize: “0.8rem”, fontWeight: 700, color: “#8fa3c0”, marginBottom: 5 }}>اسم المستخدم</label>
+<Input value={loginUser} onChange={setLoginUser} placeholder="أدخل اسم المستخدم" />
+</div>
+<div style={{ marginBottom: “1rem” }}>
+<label style={{ display: “block”, fontSize: “0.8rem”, fontWeight: 700, color: “#8fa3c0”, marginBottom: 5 }}>كلمة المرور</label>
+<Input value={loginPass} onChange={setLoginPass} placeholder="أدخل كلمة المرور" type="password" />
+</div>
+<button onClick={doLogin} onKeyDown={e => e.key === “Enter” && doLogin()}
+style={{ width: “100%”, padding: “0.9rem”, background: “linear-gradient(135deg,#c9a84c,#e8c96a)”, border: “none”, borderRadius: 8, color: “#0a0f1e”, fontFamily: “‘Cairo’,sans-serif”, fontSize: “1rem”, fontWeight: 900, cursor: “pointer” }}>دخول ⚡</button>
+<div style={{ marginTop: “1.2rem”, padding: “0.9rem”, background: “rgba(30,58,110,0.2)”, border: “1px solid rgba(100,130,200,0.1)”, borderRadius: 8, fontSize: “0.77rem”, color: “#8fa3c0”, lineHeight: 1.9 }}>
+<span style={{ color: “#e8c96a”, fontWeight: 700 }}>👑 المدرب:</span> admin / admin123<br />
+<span style={{ color: “#e8c96a”, fontWeight: 700 }}>🏋️ خالد:</span> khalid / 1234<br />
+<span style={{ color: “#e8c96a”, fontWeight: 700 }}>🏋️ محمد:</span> mohammed / 1234
+</div>
+</div>
+</div>
+</div>
+);
+
+// ── ADMIN PAGE
+if (page === “admin”) return (
+<div style={{ …S.app, display: “flex”, flexDirection: “column” }}>
+<Notif {…notif} />
+<nav style={S.nav}>
+<div style={S.logo}>⚡ IRON ELITE</div>
+<div style={{ display: “flex”, alignItems: “center”, gap: “0.8rem” }}>
+<div style={{ display: “flex”, alignItems: “center”, gap: 7, color: “#c8d4e8”, fontSize: “0.9rem” }}>
+<Avatar letter="م" size={34} />
+<span>المدرب</span>
+<Badge color="gold">ADMIN</Badge>
+</div>
+<Btn onClick={doLogout} variant="danger" size="sm">خروج</Btn>
+</div>
+</nav>
+<NavTabs tabs={[[“overview”,“📊 نظرة عامة”],[“members”,“👥 المشتركين”],[“add”,“➕ إضافة مشترك”],[“videos”,“🎬 الفيديوهات”],[“challenges”,“🎯 التحديات”],[“leaderboard”,“🏆 المتصدرون”]]} active={adminTab} onSelect={setAdminTab} />
+<div style={S.content}>
+{adminTab === “overview” && renderAdminOverview()}
+{adminTab === “members” && renderMembersTable()}
+{adminTab === “add” && renderAddMember()}
+{adminTab === “videos” && <AdminVideos videoStore={videoStore} setVideoStore={setVideoStore} onNotif={showNotif} />}
+{adminTab === “challenges” && renderChallengesAdmin()}
+{adminTab === “leaderboard” && (<div><h2 style={{ fontFamily:”‘Oswald’,sans-serif”, color:”#f0f4ff”, marginBottom:“1.2rem” }}>🏆 لوحة المتصدرين</h2>{renderLeaderboard()}</div>)}
+</div>
+</div>
+);
+
+// ── MEMBER PAGE
+if (page === “member” && currentMember) return (
+<div style={{ …S.app, display: “flex”, flexDirection: “column” }}>
+<Notif {…notif} />
+<nav style={S.nav}>
+<div style={S.logo}>⚡ IRON ELITE</div>
+<div style={{ display: “flex”, alignItems: “center”, gap: “0.8rem” }}>
+<div style={{ display: “flex”, alignItems: “center”, gap: 7, color: “#c8d4e8”, fontSize: “0.9rem” }}>
+<Avatar letter={currentMember.name[0]} size={34} />
+<span>{currentMember.name.split(” “)[0]}</span>
+<Badge color="blue">ELITE</Badge>
+</div>
+<Btn onClick={doLogout} variant="danger" size="sm">خروج</Btn>
+</div>
+</nav>
+<NavTabs tabs={[[“home”,“🏠 الرئيسية”],[“program”,“💪 برنامجي”],[“challenges”,“🎯 التحديات”],[“leaderboard”,“🏆 المتصدرون”],[“profile”,“👤 ملفي”]]} active={memberTab} onSelect={setMemberTab} />
+<div style={S.content}>
+{memberTab === “home” && renderMemberHome()}
+{memberTab === “program” && <ProgramTab exState={exState} setExState={setExState} videoStore={videoStore} setVideoStore={setVideoStore} onNotif={showNotif} />}
+{memberTab === “challenges” && renderMemberChallenges()}
+{memberTab === “leaderboard” && (<div><h2 style={{ fontFamily:”‘Oswald’,sans-serif”, color:”#f0f4ff”, marginBottom:“1.2rem” }}>🏆 لوحة المتصدرين</h2>{renderLeaderboard(currentMemberId)}</div>)}
+{memberTab === “profile” && renderMemberProfile()}
+</div>
+</div>
+);
+
+return null;
+}
