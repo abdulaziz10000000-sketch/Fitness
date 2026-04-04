@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRON ELITE | برنامج التدريب المتقدم</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0a0f1e;
+  --navy2: #0d1530;
+  --navy3: #111d3a;
+  --silver: #c8d4e8;
+  --silver2: #8fa3c0;
+  --silver3: #d8e4f4;
+  --gold: #c9a84c;
+  --gold2: #e8c96a;
+  --accent: #1e3a6e;
+  --accent2: #2a4d8f;
+  --glow: rgba(100,160,255,0.15);
+  --white: #f0f4ff;
+}
+
+- { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+font-family: ‘Cairo’, sans-serif;
+background: var(–navy);
+color: var(–silver);
+overflow-x: hidden;
+}
+
+/* ========= SCROLLBAR ========= */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(–navy2); }
+::-webkit-scrollbar-thumb { background: var(–accent2); border-radius: 3px; }
+
+/* ========= NOISE OVERLAY ========= */
+body::before {
+content: ‘’;
+position: fixed;
+inset: 0;
+background-image: url(“data:image/svg+xml,%3Csvg viewBox=‘0 0 256 256’ xmlns=‘http://www.w3.org/2000/svg’%3E%3Cfilter id=‘noise’%3E%3CfeTurbulence type=‘fractalNoise’ baseFrequency=‘0.9’ numOctaves=‘4’ stitchTiles=‘stitch’/%3E%3C/filter%3E%3Crect width=‘100%25’ height=‘100%25’ filter=‘url(%23noise)’ opacity=‘0.04’/%3E%3C/svg%3E”);
+pointer-events: none;
+z-index: 999;
+opacity: 0.5;
+}
+
+/* ========= NAV ========= */
+nav {
+position: fixed;
+top: 0; left: 0; right: 0;
+z-index: 100;
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 1rem 3rem;
+background: rgba(10,15,30,0.92);
+backdrop-filter: blur(20px);
+border-bottom: 1px solid rgba(100,130,200,0.15);
+}
+
+.logo {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.8rem;
+font-weight: 700;
+letter-spacing: 4px;
+background: linear-gradient(135deg, var(–silver3), var(–gold2), var(–silver));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.nav-links {
+display: flex;
+gap: 2rem;
+list-style: none;
+}
+
+.nav-links a {
+color: var(–silver2);
+text-decoration: none;
+font-size: 0.9rem;
+font-weight: 600;
+letter-spacing: 1px;
+transition: color 0.3s;
+cursor: pointer;
+}
+
+.nav-links a:hover { color: var(–gold2); }
+
+/* ========= HERO ========= */
+#hero {
+min-height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+position: relative;
+overflow: hidden;
+padding: 120px 3rem 4rem;
+}
+
+.hero-bg {
+position: absolute;
+inset: 0;
+background:
+radial-gradient(ellipse 80% 60% at 50% 20%, rgba(20,50,120,0.4) 0%, transparent 70%),
+radial-gradient(ellipse 50% 40% at 80% 80%, rgba(10,30,80,0.3) 0%, transparent 60%),
+linear-gradient(180deg, var(–navy) 0%, var(–navy2) 100%);
+}
+
+.hero-grid {
+position: absolute;
+inset: 0;
+background-image:
+linear-gradient(rgba(30,58,110,0.15) 1px, transparent 1px),
+linear-gradient(90deg, rgba(30,58,110,0.15) 1px, transparent 1px);
+background-size: 60px 60px;
+mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+}
+
+.hero-content {
+position: relative;
+text-align: center;
+max-width: 900px;
+}
+
+.hero-badge {
+display: inline-block;
+background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05));
+border: 1px solid rgba(201,168,76,0.4);
+color: var(–gold2);
+padding: 0.4rem 1.5rem;
+border-radius: 50px;
+font-size: 0.8rem;
+font-weight: 700;
+letter-spacing: 3px;
+text-transform: uppercase;
+margin-bottom: 2rem;
+animation: fadeUp 0.6s ease both;
+}
+
+.hero-title {
+font-family: ‘Oswald’, sans-serif;
+font-size: clamp(3rem, 8vw, 6rem);
+font-weight: 700;
+line-height: 1.1;
+letter-spacing: 2px;
+margin-bottom: 1.5rem;
+animation: fadeUp 0.7s ease 0.1s both;
+}
+
+.hero-title .line1 {
+display: block;
+background: linear-gradient(135deg, var(–white), var(–silver3));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.hero-title .line2 {
+display: block;
+background: linear-gradient(135deg, var(–gold), var(–gold2), var(–gold));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.hero-sub {
+font-size: 1.15rem;
+color: var(–silver2);
+max-width: 600px;
+margin: 0 auto 2.5rem;
+line-height: 1.8;
+animation: fadeUp 0.7s ease 0.2s both;
+}
+
+.hero-stats {
+display: flex;
+justify-content: center;
+gap: 3rem;
+margin-bottom: 3rem;
+animation: fadeUp 0.7s ease 0.3s both;
+}
+
+.stat {
+text-align: center;
+}
+
+.stat-num {
+font-family: ‘Oswald’, sans-serif;
+font-size: 2.2rem;
+font-weight: 700;
+background: linear-gradient(135deg, var(–gold), var(–gold2));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.stat-label {
+font-size: 0.8rem;
+color: var(–silver2);
+letter-spacing: 1px;
+}
+
+.btn-primary {
+display: inline-block;
+background: linear-gradient(135deg, var(–gold) 0%, var(–gold2) 50%, var(–gold) 100%);
+background-size: 200% auto;
+color: var(–navy);
+padding: 1rem 3rem;
+border-radius: 4px;
+font-weight: 900;
+font-size: 1.05rem;
+text-decoration: none;
+cursor: pointer;
+border: none;
+letter-spacing: 1px;
+transition: background-position 0.4s, transform 0.2s, box-shadow 0.3s;
+box-shadow: 0 0 30px rgba(201,168,76,0.3);
+animation: fadeUp 0.7s ease 0.4s both;
+}
+
+.btn-primary:hover {
+background-position: right center;
+transform: translateY(-2px);
+box-shadow: 0 0 50px rgba(201,168,76,0.5);
+}
+
+/* ========= SECTIONS ========= */
+section { padding: 6rem 3rem; }
+
+.section-header {
+text-align: center;
+margin-bottom: 4rem;
+}
+
+.section-tag {
+display: inline-block;
+color: var(–gold2);
+font-size: 0.75rem;
+font-weight: 700;
+letter-spacing: 4px;
+text-transform: uppercase;
+margin-bottom: 1rem;
+}
+
+.section-title {
+font-family: ‘Oswald’, sans-serif;
+font-size: clamp(2rem, 4vw, 3rem);
+font-weight: 700;
+letter-spacing: 1px;
+background: linear-gradient(135deg, var(–white), var(–silver));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.divider {
+width: 60px;
+height: 3px;
+background: linear-gradient(90deg, var(–gold), var(–gold2));
+margin: 1rem auto 0;
+border-radius: 2px;
+}
+
+/* ========= PROGRAM TABS ========= */
+#program { background: var(–navy2); }
+
+.tabs-container { max-width: 1000px; margin: 0 auto; }
+
+.tab-buttons {
+display: flex;
+gap: 0.5rem;
+flex-wrap: wrap;
+justify-content: center;
+margin-bottom: 2rem;
+}
+
+.tab-btn {
+background: rgba(30,58,110,0.3);
+border: 1px solid rgba(100,130,200,0.2);
+color: var(–silver2);
+padding: 0.7rem 1.5rem;
+border-radius: 4px;
+cursor: pointer;
+font-family: ‘Cairo’, sans-serif;
+font-weight: 700;
+font-size: 0.9rem;
+transition: all 0.3s;
+}
+
+.tab-btn:hover, .tab-btn.active {
+background: linear-gradient(135deg, var(–accent), var(–accent2));
+border-color: rgba(100,150,255,0.4);
+color: var(–white);
+box-shadow: 0 0 20px rgba(30,58,110,0.5);
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeUp 0.4s ease; }
+
+.day-header {
+background: linear-gradient(135deg, var(–accent) 0%, var(–navy3) 100%);
+border: 1px solid rgba(100,130,200,0.2);
+border-radius: 8px 8px 0 0;
+padding: 1.5rem 2rem;
+display: flex;
+align-items: center;
+gap: 1rem;
+}
+
+.day-icon {
+width: 50px; height: 50px;
+background: linear-gradient(135deg, var(–gold), var(–gold2));
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 1.3rem;
+flex-shrink: 0;
+}
+
+.day-title {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.5rem;
+color: var(–white);
+letter-spacing: 1px;
+}
+
+.day-sub { color: var(–silver2); font-size: 0.85rem; margin-top: 0.2rem; }
+
+.exercises-grid {
+background: rgba(13,21,48,0.6);
+border: 1px solid rgba(100,130,200,0.15);
+border-top: none;
+border-radius: 0 0 8px 8px;
+padding: 1.5rem;
+display: grid;
+gap: 1rem;
+}
+
+.exercise-card {
+background: rgba(30,58,110,0.15);
+border: 1px solid rgba(100,130,200,0.12);
+border-radius: 8px;
+padding: 1.2rem 1.5rem;
+display: flex;
+align-items: center;
+gap: 1.2rem;
+transition: all 0.3s;
+position: relative;
+overflow: hidden;
+}
+
+.exercise-card::before {
+content: ‘’;
+position: absolute;
+right: 0; top: 0; bottom: 0;
+width: 3px;
+background: linear-gradient(180deg, var(–gold), var(–gold2));
+opacity: 0;
+transition: opacity 0.3s;
+}
+
+.exercise-card:hover {
+background: rgba(30,58,110,0.3);
+border-color: rgba(100,150,255,0.25);
+transform: translateX(-4px);
+}
+
+.exercise-card:hover::before { opacity: 1; }
+
+.ex-num {
+width: 36px; height: 36px;
+background: linear-gradient(135deg, var(–accent), var(–accent2));
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-family: ‘Oswald’, sans-serif;
+font-weight: 700;
+font-size: 0.9rem;
+color: var(–silver3);
+flex-shrink: 0;
+}
+
+.ex-info { flex: 1; }
+
+.ex-name {
+font-weight: 700;
+color: var(–white);
+font-size: 1rem;
+margin-bottom: 0.3rem;
+}
+
+.ex-detail {
+display: flex;
+gap: 1rem;
+flex-wrap: wrap;
+}
+
+.ex-badge {
+background: rgba(201,168,76,0.12);
+border: 1px solid rgba(201,168,76,0.25);
+color: var(–gold2);
+padding: 0.2rem 0.7rem;
+border-radius: 20px;
+font-size: 0.75rem;
+font-weight: 600;
+}
+
+.ex-badge.blue {
+background: rgba(100,150,255,0.1);
+border-color: rgba(100,150,255,0.25);
+color: #8ab4ff;
+}
+
+.super-set-badge {
+background: linear-gradient(135deg, rgba(255,100,100,0.15), rgba(255,50,50,0.05));
+border: 1px solid rgba(255,100,100,0.3);
+color: #ff8080;
+padding: 0.2rem 0.7rem;
+border-radius: 20px;
+font-size: 0.72rem;
+font-weight: 700;
+}
+
+/* ========= LEADERBOARD ========= */
+#leaderboard { background: var(–navy); }
+
+.leaderboard-table {
+max-width: 800px;
+margin: 0 auto;
+background: rgba(13,21,48,0.8);
+border: 1px solid rgba(100,130,200,0.15);
+border-radius: 12px;
+overflow: hidden;
+}
+
+.lb-header {
+display: grid;
+grid-template-columns: 80px 1fr 120px 120px;
+padding: 1rem 1.5rem;
+background: rgba(30,58,110,0.4);
+border-bottom: 1px solid rgba(100,130,200,0.15);
+font-size: 0.8rem;
+font-weight: 700;
+color: var(–silver2);
+letter-spacing: 1px;
+text-transform: uppercase;
+}
+
+.lb-row {
+display: grid;
+grid-template-columns: 80px 1fr 120px 120px;
+padding: 1rem 1.5rem;
+border-bottom: 1px solid rgba(100,130,200,0.08);
+align-items: center;
+transition: background 0.3s;
+}
+
+.lb-row:last-child { border-bottom: none; }
+.lb-row:hover { background: rgba(30,58,110,0.2); }
+
+.lb-rank {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.4rem;
+font-weight: 700;
+}
+
+.rank-1 { color: var(–gold2); }
+.rank-2 { color: #c0c0c0; }
+.rank-3 { color: #cd7f32; }
+
+.medal { font-size: 1.3rem; }
+
+.lb-name {
+font-weight: 700;
+color: var(–white);
+display: flex;
+align-items: center;
+gap: 0.7rem;
+}
+
+.avatar {
+width: 38px; height: 38px;
+border-radius: 50%;
+background: linear-gradient(135deg, var(–accent), var(–accent2));
+display: flex;
+align-items: center;
+justify-content: center;
+font-weight: 900;
+font-size: 0.85rem;
+color: var(–silver3);
+border: 2px solid rgba(100,150,255,0.3);
+}
+
+.lb-pts {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.2rem;
+font-weight: 700;
+color: var(–gold2);
+text-align: center;
+}
+
+.lb-streak {
+text-align: center;
+color: #ff9040;
+font-weight: 700;
+}
+
+/* ========= CHALLENGES ========= */
+#challenges { background: var(–navy2); }
+
+.challenges-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+gap: 1.5rem;
+max-width: 1100px;
+margin: 0 auto;
+}
+
+.challenge-card {
+background: rgba(13,21,48,0.7);
+border: 1px solid rgba(100,130,200,0.15);
+border-radius: 12px;
+padding: 2rem;
+position: relative;
+overflow: hidden;
+transition: transform 0.3s, border-color 0.3s;
+}
+
+.challenge-card::after {
+content: ‘’;
+position: absolute;
+inset: 0;
+background: radial-gradient(ellipse at top right, rgba(30,58,110,0.3), transparent 60%);
+pointer-events: none;
+}
+
+.challenge-card:hover {
+transform: translateY(-6px);
+border-color: rgba(201,168,76,0.3);
+}
+
+.challenge-icon {
+font-size: 2.5rem;
+margin-bottom: 1rem;
+}
+
+.challenge-title {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.3rem;
+color: var(–white);
+letter-spacing: 1px;
+margin-bottom: 0.5rem;
+}
+
+.challenge-desc {
+color: var(–silver2);
+font-size: 0.9rem;
+line-height: 1.7;
+margin-bottom: 1.2rem;
+}
+
+.challenge-reward {
+display: flex;
+align-items: center;
+gap: 0.5rem;
+font-size: 0.85rem;
+font-weight: 700;
+color: var(–gold2);
+}
+
+.progress-bar-container {
+margin-top: 1rem;
+background: rgba(30,58,110,0.3);
+border-radius: 10px;
+height: 8px;
+overflow: hidden;
+}
+
+.progress-bar {
+height: 100%;
+border-radius: 10px;
+background: linear-gradient(90deg, var(–gold), var(–gold2));
+transition: width 1.5s ease;
+}
+
+.challenge-days {
+display: flex;
+gap: 0.4rem;
+margin-top: 0.8rem;
+flex-wrap: wrap;
+}
+
+.day-dot {
+width: 24px; height: 24px;
+border-radius: 4px;
+background: rgba(30,58,110,0.4);
+border: 1px solid rgba(100,130,200,0.2);
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 0.6rem;
+color: var(–silver2);
+}
+
+.day-dot.done {
+background: linear-gradient(135deg, var(–gold), var(–gold2));
+border-color: var(–gold2);
+color: var(–navy);
+font-weight: 900;
+}
+
+/* ========= PROGRESS TRACKER ========= */
+#tracker { background: var(–navy); }
+
+.tracker-container {
+max-width: 900px;
+margin: 0 auto;
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 2rem;
+}
+
+.tracker-card {
+background: rgba(13,21,48,0.8);
+border: 1px solid rgba(100,130,200,0.15);
+border-radius: 12px;
+padding: 2rem;
+}
+
+.tracker-title {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.1rem;
+color: var(–silver3);
+letter-spacing: 1px;
+margin-bottom: 1.5rem;
+display: flex;
+align-items: center;
+gap: 0.7rem;
+}
+
+.metric-row {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 0.9rem 0;
+border-bottom: 1px solid rgba(100,130,200,0.08);
+}
+
+.metric-row:last-child { border-bottom: none; }
+
+.metric-label { color: var(–silver2); font-size: 0.9rem; }
+
+.metric-value {
+font-family: ‘Oswald’, sans-serif;
+font-size: 1.2rem;
+font-weight: 700;
+color: var(–white);
+}
+
+.metric-change {
+font-size: 0.75rem;
+font-weight: 700;
+padding: 0.2rem 0.6rem;
+border-radius: 20px;
+}
+
+.up { background: rgba(50,200,100,0.15); color: #50c878; }
+.down { background: rgba(255,80,80,0.15); color: #ff6060; }
+
+.week-grid {
+display: grid;
+grid-template-columns: repeat(7, 1fr);
+gap: 0.5rem;
+margin-top: 0.5rem;
+}
+
+.week-cell {
+aspect-ratio: 1;
+border-radius: 4px;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 0.65rem;
+font-weight: 700;
+}
+
+.week-cell.done { background: linear-gradient(135deg, var(–gold), var(–gold2)); color: var(–navy); }
+.week-cell.missed { background: rgba(255,80,80,0.15); color: #ff6060; }
+.week-cell.today { background: rgba(100,150,255,0.2); color: #8ab4ff; border: 1px solid rgba(100,150,255,0.4); }
+.week-cell.upcoming { background: rgba(30,58,110,0.3); color: var(–silver2); }
+
+/* ========= POINTS SYSTEM ========= */
+.points-card {
+grid-column: 1 / -1;
+background: linear-gradient(135deg, rgba(30,58,110,0.4), rgba(13,21,48,0.8));
+border: 1px solid rgba(201,168,76,0.2);
+border-radius: 12px;
+padding: 2rem;
+display: flex;
+justify-content: space-around;
+align-items: center;
+flex-wrap: wrap;
+gap: 2rem;
+}
+
+.points-item { text-align: center; }
+
+.points-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+.points-num {
+font-family: ‘Oswald’, sans-serif;
+font-size: 2.5rem;
+font-weight: 700;
+background: linear-gradient(135deg, var(–gold), var(–gold2));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+.points-label { color: var(–silver2); font-size: 0.85rem; }
+
+/* ========= MOTIVATIONAL BANNER ========= */
+.motivation-banner {
+background: linear-gradient(135deg, var(–accent) 0%, var(–navy3) 50%, rgba(201,168,76,0.1) 100%);
+border: 1px solid rgba(201,168,76,0.2);
+border-radius: 12px;
+padding: 3rem;
+text-align: center;
+max-width: 800px;
+margin: 0 auto;
+position: relative;
+overflow: hidden;
+}
+
+.motivation-banner::before {
+content: ‘”’;
+position: absolute;
+top: -20px; right: 30px;
+font-size: 12rem;
+font-family: ‘Oswald’, sans-serif;
+color: rgba(201,168,76,0.06);
+line-height: 1;
+}
+
+.motivation-quote {
+font-family: ‘Oswald’, sans-serif;
+font-size: clamp(1.3rem, 3vw, 2rem);
+color: var(–white);
+letter-spacing: 1px;
+margin-bottom: 1rem;
+position: relative;
+}
+
+.motivation-author {
+color: var(–gold2);
+font-size: 0.9rem;
+font-weight: 600;
+}
+
+/* ========= FOOTER ========= */
+footer {
+background: rgba(5,10,25,0.95);
+border-top: 1px solid rgba(100,130,200,0.12);
+padding: 3rem;
+text-align: center;
+}
+
+.footer-logo {
+font-family: ‘Oswald’, sans-serif;
+font-size: 2rem;
+font-weight: 700;
+letter-spacing: 4px;
+background: linear-gradient(135deg, var(–silver3), var(–gold2));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+margin-bottom: 1rem;
+}
+
+.footer-text { color: var(–silver2); font-size: 0.85rem; line-height: 2; }
+
+/* ========= ANIMATIONS ========= */
+@keyframes fadeUp {
+from { opacity: 0; transform: translateY(20px); }
+to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-gold {
+0%, 100% { box-shadow: 0 0 20px rgba(201,168,76,0.3); }
+50% { box-shadow: 0 0 40px rgba(201,168,76,0.6); }
+}
+
+.pulse { animation: pulse-gold 2s ease infinite; }
+
+/* ========= RESPONSIVE ========= */
+@media (max-width: 768px) {
+nav { padding: 1rem 1.5rem; }
+.nav-links { display: none; }
+section { padding: 4rem 1.5rem; }
+.hero-stats { gap: 1.5rem; }
+.lb-header, .lb-row { grid-template-columns: 60px 1fr 80px; }
+.lb-streak { display: none; }
+.tracker-container { grid-template-columns: 1fr; }
+}
+
+/* ========= SCROLLED NAV ========= */
+nav.scrolled {
+border-bottom-color: rgba(201,168,76,0.2);
+box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+}
+</style>
+
+</head>
+<body>
+
+<!-- NAV -->
+
+<nav id="navbar">
+  <div class="logo">⚡ IRON ELITE</div>
+  <ul class="nav-links">
+    <li><a onclick="scrollTo('hero')">الرئيسية</a></li>
+    <li><a onclick="scrollTo('program')">البرنامج</a></li>
+    <li><a onclick="scrollTo('challenges')">التحديات</a></li>
+    <li><a onclick="scrollTo('leaderboard')">المتصدرون</a></li>
+    <li><a onclick="scrollTo('tracker')">تتبع التقدم</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-badge">🏆 برنامج النخبة — 2025</div>
+    <h1 class="hero-title">
+      <span class="line1">شكّل جسدك</span>
+      <span class="line2">بمعايير الأبطال</span>
+    </h1>
+    <p class="hero-sub">
+      برنامج تدريبي متقدم مصمم لدفع حدودك — تحديات حقيقية، نقاط، منافسة، وتحول لا يُصدق
+    </p>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-num">5</div>
+        <div class="stat-label">أيام تدريب</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">3</div>
+        <div class="stat-label">مجموعات عضلية</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">∞</div>
+        <div class="stat-label">إمكانيات</div>
+      </div>
+    </div>
+    <button class="btn-primary pulse" onclick="scrollTo('program')">ابدأ رحلتك الآن 🔥</button>
+  </div>
+</section>
+
+<!-- MOTIVATION -->
+
+<section style="padding:4rem 3rem; background:var(--navy2);">
+  <div class="motivation-banner">
+    <div class="motivation-quote">الألم الذي تشعر به اليوم هو القوة التي ستشعر بها غداً</div>
+    <div class="motivation-author">— فلسفة IRON ELITE</div>
+  </div>
+</section>
+
+<!-- PROGRAM -->
+
+<section id="program">
+  <div class="section-header">
+    <div class="section-tag">📋 الجدول الأسبوعي</div>
+    <h2 class="section-title">برنامج التدريب المتكامل</h2>
+    <div class="divider"></div>
+  </div>
+
+  <div class="tabs-container">
+    <div class="tab-buttons">
+      <button class="tab-btn active" onclick="showTab(1)">اليوم الأول</button>
+      <button class="tab-btn" onclick="showTab(2)">اليوم الثاني</button>
+      <button class="tab-btn" onclick="showTab(3)">اليوم الثالث</button>
+      <button class="tab-btn" onclick="showTab(4)">اليوم الرابع</button>
+      <button class="tab-btn" onclick="showTab(5)">اليوم الخامس</button>
+    </div>
+
+```
+<!-- DAY 1 -->
+<div class="tab-content active" id="tab1">
+  <div class="day-header">
+    <div class="day-icon">💪</div>
+    <div>
+      <div class="day-title">اليوم الأول — عضلات الدفع الكاملة</div>
+      <div class="day-sub">صدر • كتف • ترايسبس</div>
+    </div>
+  </div>
+  <div class="exercises-grid">
+    <div class="exercise-card">
+      <div class="ex-num">١</div>
+      <div class="ex-info">
+        <div class="ex-name">بنش برس مستوي (صدر)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=bench+press+technique" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٢</div>
+      <div class="ex-info">
+        <div class="ex-name">بنش برس علوي (صدر علوي)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=incline+bench+press" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٣</div>
+      <div class="ex-info">
+        <div class="ex-name">كتف أمامي</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨–١٢ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=front+shoulder+raise" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٤</div>
+      <div class="ex-info">
+        <div class="ex-name">تفتيح صدر (فلاي)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">١٢–١٥ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=chest+fly+exercise" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٥</div>
+      <div class="ex-info">
+        <div class="ex-name">ترايسبس كيبل (Triceps Pushdown)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">١٢ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=triceps+cable+pushdown" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٦</div>
+      <div class="ex-info">
+        <div class="ex-name">كتف جانبي — تكنيك ٨-٧-٨</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨+٧+٨ عدات</span>
+          <span class="ex-badge blue">٢–٣ جلسات</span>
+          <span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=lateral+raise+technique" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+  </div>
+</div>
+
+<!-- DAY 2 -->
+<div class="tab-content" id="tab2">
+  <div class="day-header">
+    <div class="day-icon">🏋️</div>
+    <div>
+      <div class="day-title">اليوم الثاني — عضلات السحب (Pull Day)</div>
+      <div class="day-sub">ظهر • بايسبس • كتف</div>
+    </div>
+  </div>
+  <div class="exercises-grid">
+    <div class="exercise-card">
+      <div class="ex-num">١</div>
+      <div class="ex-info">
+        <div class="ex-name">سحب علوي واسع (Lat Pulldown Wide)</div>
+        <div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=lat+pulldown+wide+grip" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٢</div>
+      <div class="ex-info">
+        <div class="ex-name">سحب علوي ضيق (Lat Pulldown Close)</div>
+        <div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=lat+pulldown+close+grip" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٣</div>
+      <div class="ex-info">
+        <div class="ex-name">سحب أفقي واسع (Seated Row Wide)</div>
+        <div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=seated+cable+row+wide" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٤</div>
+      <div class="ex-info">
+        <div class="ex-name">سحب أفقي ضيق (Seated Row Close)</div>
+        <div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=seated+cable+row+close" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٥</div>
+      <div class="ex-info">
+        <div class="ex-name">كتف أمامي + بايسبس كيبل (سوبر سيت)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">١٢ عدات</span>
+          <span class="ex-badge blue">٣ جلسات</span>
+          <span class="super-set-badge">⚡ سوبر سيت</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=cable+bicep+curl" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٦</div>
+      <div class="ex-info">
+        <div class="ex-name">كتف جانبي — تكنيك ٨-٧-٨</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨+٧+٨ عدات</span>
+          <span class="ex-badge blue">٣ جلسات</span>
+          <span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=lateral+raise+dropset" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٧</div>
+      <div class="ex-info">
+        <div class="ex-name">بايسبس — تكنيك ٨-٧-٨</div>
+        <div class="ex-detail">
+          <span class="ex-badge">٨+٧+٨ عدات</span>
+          <span class="ex-badge blue">٣ جلسات</span>
+          <span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=bicep+curl+technique" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+  </div>
+</div>
+
+<!-- DAY 3 -->
+<div class="tab-content" id="tab3">
+  <div class="day-header">
+    <div class="day-icon">🦵</div>
+    <div>
+      <div class="day-title">اليوم الثالث — عضلات الأرجل</div>
+      <div class="day-sub">كوادريسبس • هامسترينج • غلوتس</div>
+    </div>
+  </div>
+  <div class="exercises-grid">
+    <div class="exercise-card">
+      <div class="ex-num">١</div>
+      <div class="ex-info">
+        <div class="ex-name">سكوات (Squat)</div>
+        <div class="ex-detail"><span class="ex-badge">٨ عدات</span><span class="ex-badge blue">٣ جلسات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=squat+form+technique" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٢</div>
+      <div class="ex-info">
+        <div class="ex-name">رفرفة أمامية (Leg Extension)</div>
+        <div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جولات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=leg+extension+machine" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٣</div>
+      <div class="ex-info">
+        <div class="ex-name">رفرفة خلفية (Leg Curl)</div>
+        <div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جولات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=leg+curl+hamstring" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٤</div>
+      <div class="ex-info">
+        <div class="ex-name">Leg Press</div>
+        <div class="ex-detail"><span class="ex-badge">٨ عدات</span><span class="ex-badge blue">٣ جولات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=leg+press+machine+form" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٥</div>
+      <div class="ex-info">
+        <div class="ex-name">البطات (Calf Raises)</div>
+        <div class="ex-detail"><span class="ex-badge">١٥ عدات</span><span class="ex-badge blue">٣ جولات</span></div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=calf+raises+standing" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+    <div class="exercise-card">
+      <div class="ex-num">٦</div>
+      <div class="ex-info">
+        <div class="ex-name">غلوتس + العضلة الضامة (سوبر سيت)</div>
+        <div class="ex-detail">
+          <span class="ex-badge">١٢–١٥ عدات</span>
+          <span class="ex-badge blue">٣ جولات</span>
+          <span class="super-set-badge">⚡ سوبر سيت</span>
+        </div>
+      </div>
+      <a href="https://www.youtube.com/results?search_query=glute+abductor+superset" target="_blank" style="color:var(--silver2); font-size:1.3rem; text-decoration:none; transition:color 0.3s;" onmouseover="this.style.color='var(--gold2)'" onmouseout="this.style.color='var(--silver2)'">▶</a>
+    </div>
+  </div>
+</div>
+
+<!-- DAY 4 = DAY 1 -->
+<div class="tab-content" id="tab4">
+  <div class="day-header">
+    <div class="day-icon">🔁</div>
+    <div>
+      <div class="day-title">اليوم الرابع — عضلات الدفع (تكرار اليوم الأول)</div>
+      <div class="day-sub">صدر • كتف • ترايسبس</div>
+    </div>
+  </div>
+  <div class="exercises-grid">
+    <div class="exercise-card" style="background:rgba(201,168,76,0.05); border-color:rgba(201,168,76,0.15);">
+      <div style="font-size:2rem; margin-left:1rem;">🔥</div>
+      <div class="ex-info">
+        <div class="ex-name" style="color:var(--gold2);">نفس تمارين اليوم الأول بالكامل</div>
+        <div style="color:var(--silver2); font-size:0.9rem; margin-top:0.3rem;">الهدف: تجاوز سجلك السابق وإضافة وزن أو عدات أكثر</div>
+      </div>
+    </div>
+    <div class="exercise-card"><div class="ex-num">١</div><div class="ex-info"><div class="ex-name">بنش برس مستوي (صدر)</div><div class="ex-detail"><span class="ex-badge">٨ عدات</span><span class="ex-badge blue">٣ جولات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٢</div><div class="ex-info"><div class="ex-name">بنش برس علوي (صدر علوي)</div><div class="ex-detail"><span class="ex-badge">٨ عدات</span><span class="ex-badge blue">٣ جولات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٣</div><div class="ex-info"><div class="ex-name">كتف أمامي</div><div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جولات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٤</div><div class="ex-info"><div class="ex-name">تفتيح صدر (فلاي)</div><div class="ex-detail"><span class="ex-badge">١٢–١٥ عدات</span><span class="ex-badge blue">٣ جولات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٥</div><div class="ex-info"><div class="ex-name">ترايسبس كيبل</div><div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جولات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٦</div><div class="ex-info"><div class="ex-name">كتف جانبي — تكنيك ٨-٧-٨</div><div class="ex-detail"><span class="ex-badge">٨+٧+٨</span><span class="ex-badge blue">٢–٣ جلسات</span><span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span></div></div></div>
+  </div>
+</div>
+
+<!-- DAY 5 = DAY 2 -->
+<div class="tab-content" id="tab5">
+  <div class="day-header">
+    <div class="day-icon">🔁</div>
+    <div>
+      <div class="day-title">اليوم الخامس — عضلات السحب (تكرار اليوم الثاني)</div>
+      <div class="day-sub">ظهر • بايسبس • كتف</div>
+    </div>
+  </div>
+  <div class="exercises-grid">
+    <div class="exercise-card" style="background:rgba(201,168,76,0.05); border-color:rgba(201,168,76,0.15);">
+      <div style="font-size:2rem; margin-left:1rem;">💪</div>
+      <div class="ex-info">
+        <div class="ex-name" style="color:var(--gold2);">نفس تمارين اليوم الثاني بالكامل</div>
+        <div style="color:var(--silver2); font-size:0.9rem; margin-top:0.3rem;">انهِ الأسبوع بقوة — لا تتوقف حتى تصل للقمة</div>
+      </div>
+    </div>
+    <div class="exercise-card"><div class="ex-num">١</div><div class="ex-info"><div class="ex-name">سحب علوي واسع</div><div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٢</div><div class="ex-info"><div class="ex-name">سحب علوي ضيق</div><div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٣</div><div class="ex-info"><div class="ex-name">سحب أفقي واسع</div><div class="ex-detail"><span class="ex-badge">٨–١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٤</div><div class="ex-info"><div class="ex-name">سحب أفقي ضيق</div><div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٥</div><div class="ex-info"><div class="ex-name">كتف أمامي + بايسبس كيبل (سوبر سيت)</div><div class="ex-detail"><span class="ex-badge">١٢ عدات</span><span class="ex-badge blue">٣ جلسات</span><span class="super-set-badge">⚡ سوبر سيت</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٦</div><div class="ex-info"><div class="ex-name">كتف جانبي — تكنيك ٨-٧-٨</div><div class="ex-detail"><span class="ex-badge">٨+٧+٨</span><span class="ex-badge blue">٣ جلسات</span><span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span></div></div></div>
+    <div class="exercise-card"><div class="ex-num">٧</div><div class="ex-info"><div class="ex-name">بايسبس — تكنيك ٨-٧-٨</div><div class="ex-detail"><span class="ex-badge">٨+٧+٨</span><span class="ex-badge blue">٣ جلسات</span><span class="ex-badge" style="background:rgba(200,100,255,0.12);border-color:rgba(200,100,255,0.3);color:#d080ff;">تكنيك متقدم</span></div></div></div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- CHALLENGES -->
+
+<section id="challenges">
+  <div class="section-header">
+    <div class="section-tag">🎯 هذا الأسبوع</div>
+    <h2 class="section-title">التحديات الأسبوعية</h2>
+    <div class="divider"></div>
+  </div>
+  <div class="challenges-grid">
+    <div class="challenge-card">
+      <div class="challenge-icon">🔥</div>
+      <div class="challenge-title">تحدي الحضور الكامل</div>
+      <div class="challenge-desc">أكمل الأيام الخمسة هذا الأسبوع دون غياب واحد. الثبات هو السر!</div>
+      <div class="challenge-reward">🏆 +500 نقطة عند الإكمال</div>
+      <div class="progress-bar-container">
+        <div class="progress-bar" style="width: 60%"></div>
+      </div>
+      <div class="challenge-days">
+        <div class="day-dot done">✓</div>
+        <div class="day-dot done">✓</div>
+        <div class="day-dot done">✓</div>
+        <div class="day-dot today">●</div>
+        <div class="day-dot upcoming">٥</div>
+      </div>
+    </div>
+
+```
+<div class="challenge-card">
+  <div class="challenge-icon">💪</div>
+  <div class="challenge-title">تحدي الوزن الجديد</div>
+  <div class="challenge-desc">زد الوزن في البنش برس هذا الأسبوع ولو 2.5 كيلو عن الأسبوع الماضي.</div>
+  <div class="challenge-reward">⭐ +300 نقطة + شارة "القوة"</div>
+  <div class="progress-bar-container">
+    <div class="progress-bar" style="width: 40%"></div>
+  </div>
+</div>
+
+<div class="challenge-card">
+  <div class="challenge-icon">⚡</div>
+  <div class="challenge-title">تحدي التكنيك المتقدم</div>
+  <div class="challenge-desc">طبّق تكنيك ٨-٧-٨ بشكل صحيح في كل تمارين الكتف هذا الأسبوع.</div>
+  <div class="challenge-reward">🎖️ +400 نقطة + شارة "الدقة"</div>
+  <div class="progress-bar-container">
+    <div class="progress-bar" style="width: 20%"></div>
+  </div>
+</div>
+
+<div class="challenge-card">
+  <div class="challenge-icon">🦵</div>
+  <div class="challenge-title">تحدي عضلات الأرجل</div>
+  <div class="challenge-desc">أكمل يوم الأرجل الكامل بما فيه السوبر سيت ولا تحذف أي تمرين.</div>
+  <div class="challenge-reward">💎 +600 نقطة + شارة "الأبطال"</div>
+  <div class="progress-bar-container">
+    <div class="progress-bar" style="width: 0%"></div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- LEADERBOARD -->
+
+<section id="leaderboard">
+  <div class="section-header">
+    <div class="section-tag">🏆 المنافسة</div>
+    <h2 class="section-title">لوحة المتصدرين</h2>
+    <div class="divider"></div>
+  </div>
+  <div class="leaderboard-table">
+    <div class="lb-header">
+      <div>المركز</div>
+      <div>المتدرب</div>
+      <div style="text-align:center;">النقاط</div>
+      <div style="text-align:center;">الاستمرارية</div>
+    </div>
+    <div class="lb-row">
+      <div class="lb-rank rank-1">🥇</div>
+      <div class="lb-name"><div class="avatar">خ</div>خالد العتيبي</div>
+      <div class="lb-pts">4,820</div>
+      <div class="lb-streak">🔥 21 يوم</div>
+    </div>
+    <div class="lb-row">
+      <div class="lb-rank rank-2">🥈</div>
+      <div class="lb-name"><div class="avatar">م</div>محمد الغامدي</div>
+      <div class="lb-pts">4,210</div>
+      <div class="lb-streak">🔥 18 يوم</div>
+    </div>
+    <div class="lb-row">
+      <div class="lb-rank rank-3">🥉</div>
+      <div class="lb-name"><div class="avatar">ف</div>فيصل الدوسري</div>
+      <div class="lb-pts">3,950</div>
+      <div class="lb-streak">🔥 14 يوم</div>
+    </div>
+    <div class="lb-row">
+      <div class="lb-rank" style="color:var(--silver2); font-size:1.1rem;">4</div>
+      <div class="lb-name"><div class="avatar">ع</div>عبدالله الشمري</div>
+      <div class="lb-pts" style="color:var(--silver2);">3,640</div>
+      <div class="lb-streak" style="color:var(--silver2);">⚡ 10 يوم</div>
+    </div>
+    <div class="lb-row">
+      <div class="lb-rank" style="color:var(--silver2); font-size:1.1rem;">5</div>
+      <div class="lb-name"><div class="avatar">س</div>سلطان القحطاني</div>
+      <div class="lb-pts" style="color:var(--silver2);">3,120</div>
+      <div class="lb-streak" style="color:var(--silver2);">⚡ 7 يوم</div>
+    </div>
+  </div>
+</section>
+
+<!-- TRACKER -->
+
+<section id="tracker">
+  <div class="section-header">
+    <div class="section-tag">📊 تقدمك</div>
+    <h2 class="section-title">تتبع التقدم الأسبوعي</h2>
+    <div class="divider"></div>
+  </div>
+  <div class="tracker-container">
+
+```
+<div class="tracker-card">
+  <div class="tracker-title">📈 مؤشرات هذا الأسبوع</div>
+  <div class="metric-row">
+    <span class="metric-label">جلسات مكتملة</span>
+    <div style="display:flex; gap:0.7rem; align-items:center;">
+      <span class="metric-value">3/5</span>
+      <span class="metric-change up">↑ عن الأسبوع</span>
+    </div>
+  </div>
+  <div class="metric-row">
+    <span class="metric-label">إجمالي النقاط</span>
+    <div style="display:flex; gap:0.7rem; align-items:center;">
+      <span class="metric-value">1,240</span>
+      <span class="metric-change up">↑ 340</span>
+    </div>
+  </div>
+  <div class="metric-row">
+    <span class="metric-label">التحديات المنجزة</span>
+    <div style="display:flex; gap:0.7rem; align-items:center;">
+      <span class="metric-value">2/4</span>
+      <span class="metric-change up">جيد</span>
+    </div>
+  </div>
+  <div class="metric-row">
+    <span class="metric-label">الاستمرارية الحالية</span>
+    <div style="display:flex; gap:0.7rem; align-items:center;">
+      <span class="metric-value">🔥 8</span>
+      <span class="metric-change up">↑ يوم</span>
+    </div>
+  </div>
+</div>
+
+<div class="tracker-card">
+  <div class="tracker-title">📅 سجل أيام هذا الشهر</div>
+  <div style="color:var(--silver2); font-size:0.8rem; margin-bottom:0.8rem;">أبريل 2025</div>
+  <div class="week-grid">
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">أح</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">إث</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">ثل</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">أر</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">خم</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">جم</div>
+    <div class="week-cell" style="background:transparent;color:var(--silver2);font-size:0.7rem;">سب</div>
+
+    <div class="week-cell upcoming">١</div>
+    <div class="week-cell done">✓</div>
+    <div class="week-cell done">✓</div>
+    <div class="week-cell missed">✗</div>
+    <div class="week-cell done">✓</div>
+    <div class="week-cell upcoming">٦</div>
+    <div class="week-cell upcoming">٧</div>
+
+    <div class="week-cell done">✓</div>
+    <div class="week-cell done">✓</div>
+    <div class="week-cell done">✓</div>
+    <div class="week-cell today">●</div>
+    <div class="week-cell upcoming">١٢</div>
+    <div class="week-cell upcoming">١٣</div>
+    <div class="week-cell upcoming">١٤</div>
+  </div>
+  <div style="display:flex; gap:1rem; margin-top:1rem; font-size:0.75rem; flex-wrap:wrap;">
+    <span style="color:var(--gold2);">✓ حضر</span>
+    <span style="color:#ff6060;">✗ غياب</span>
+    <span style="color:#8ab4ff;">● اليوم</span>
+  </div>
+</div>
+
+<div class="points-card">
+  <div class="points-item">
+    <div class="points-icon">⭐</div>
+    <div class="points-num">1,240</div>
+    <div class="points-label">نقاطك هذا الأسبوع</div>
+  </div>
+  <div class="points-item">
+    <div class="points-icon">🏆</div>
+    <div class="points-num">8,930</div>
+    <div class="points-label">إجمالي النقاط</div>
+  </div>
+  <div class="points-item">
+    <div class="points-icon">🎖️</div>
+    <div class="points-num">7</div>
+    <div class="points-label">شارات مكتسبة</div>
+  </div>
+  <div class="points-item">
+    <div class="points-icon">🔥</div>
+    <div class="points-num">8</div>
+    <div class="points-label">أيام متتالية</div>
+  </div>
+</div>
+```
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+
+<footer>
+  <div class="footer-logo">⚡ IRON ELITE</div>
+  <div class="footer-text">
+    برنامج التدريب المتقدم لكمال الأجسام<br>
+    صُمّم للأبطال الذين لا يقبلون بالعادي
+  </div>
+  <div style="margin-top:1.5rem; color:rgba(100,130,200,0.4); font-size:0.75rem; letter-spacing:2px;">IRON ELITE © 2025 — ALL RIGHTS RESERVED</div>
+</footer>
+
+<script>
+// NAV scroll effect
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50);
+});
+
+// Smooth scroll
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+}
+
+// Tab system
+function showTab(num) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab' + num).classList.add('active');
+  document.querySelectorAll('.tab-btn')[num - 1].classList.add('active');
+}
+
+// Progress bar animation on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.querySelectorAll('.progress-bar').forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0';
+        setTimeout(() => { bar.style.width = width; }, 100);
+      });
+    }
+  });
+}, { threshold: 0.3 });
+
+document.querySelectorAll('#challenges').forEach(el => observer.observe(el));
+
+// Animate numbers on scroll
+function animateNumber(el, target, duration = 2000) {
+  let start = 0;
+  const step = target / (duration / 16);
+  const timer = setInterval(() => {
+    start += step;
+    if (start >= target) { el.textContent = target.toLocaleString('ar-SA'); clearInterval(timer); }
+    else { el.textContent = Math.floor(start).toLocaleString('ar-SA'); }
+  }, 16);
+}
+
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.querySelectorAll('.points-num').forEach(el => {
+        const val = parseInt(el.textContent.replace(/[^0-9]/g, ''));
+        if (!isNaN(val) && val > 10) animateNumber(el, val);
+      });
+      statsObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.points-card').forEach(el => statsObserver.observe(el));
+</script>
+
+</body>
+</html>
