@@ -1,0 +1,813 @@
+import { useState, useEffect } from "react";
+
+// ─── PROTECTION ───────────────────────────────────────────────
+function useProtection() {
+  useEffect(() => {
+    const block = (e) => e.preventDefault();
+    const blockKeys = (e) => {
+      if (e.key === "F12" || (e.ctrlKey && ["u","U","s","S"].includes(e.key)) ||
+          (e.ctrlKey && e.shiftKey && ["i","I","j","J","c","C"].includes(e.key))) {
+        e.preventDefault();
+      }
+      if (e.key === "PrintScreen") {
+        document.body.style.filter = "blur(20px)";
+        setTimeout(() => { document.body.style.filter = ""; }, 2000);
+      }
+    };
+    document.addEventListener("contextmenu", block);
+    document.addEventListener("selectstart", block);
+    document.addEventListener("copy", block);
+    document.addEventListener("keydown", blockKeys);
+    return () => {
+      document.removeEventListener("contextmenu", block);
+      document.removeEventListener("selectstart", block);
+      document.removeEventListener("copy", block);
+      document.removeEventListener("keydown", blockKeys);
+    };
+  }, []);
+}
+
+// ─── DATA ──────────────────────────────────────────────────────
+const TRAINER = { username: "coach_admin", password: "Admin@2025" };
+
+const INIT_MEMBERS = [
+  { id: 1, name: "أحمد الشمري",   username: "ahmed",  password: "pass123", plan: "6days", goal: "bulk", weight: 85, height: 178, fat: 22, points: 340, joined: "2025-01-15", progress: [{m:"يناير",w:85},{m:"فبراير",w:83},{m:"مارس",w:81}] },
+  { id: 2, name: "خالد العتيبي",  username: "khaled", password: "pass123", plan: "3days", goal: "cut",  weight: 95, height: 175, fat: 28, points: 210, joined: "2025-02-01", progress: [{m:"يناير",w:95},{m:"فبراير",w:93},{m:"مارس",w:91}] },
+  { id: 3, name: "فهد القحطاني", username: "fahad",  password: "pass123", plan: "5days", goal: "bulk", weight: 72, height: 180, fat: 15, points: 480, joined: "2025-01-20", progress: [{m:"يناير",w:72},{m:"فبراير",w:74},{m:"مارس",w:76}] },
+];
+
+const EX = {
+  chest:     [{id:"c1",n:"بنش برس بالبار",sets:"4",reps:"8-12",rest:"90ث",lvl:"متوسط",ico:"💪"},{id:"c2",n:"فلاي بالدمبل",sets:"3",reps:"12-15",rest:"60ث",lvl:"مبتدئ",ico:"🏋️"},{id:"c3",n:"انكلاين بنش برس",sets:"4",reps:"10",rest:"90ث",lvl:"متوسط",ico:"⬆️"},{id:"c4",n:"ضغط بالكابل",sets:"3",reps:"15",rest:"60ث",lvl:"مبتدئ",ico:"🔄"}],
+  back:      [{id:"b1",n:"ديدليفت",sets:"4",reps:"6-8",rest:"120ث",lvl:"متقدم",ico:"🏗️"},{id:"b2",n:"بار رو",sets:"4",reps:"8-12",rest:"90ث",lvl:"متوسط",ico:"🔙"},{id:"b3",n:"لات بول داون",sets:"4",reps:"10-12",rest:"90ث",lvl:"مبتدئ",ico:"⬇️"},{id:"b4",n:"سيتد رو",sets:"3",reps:"12",rest:"75ث",lvl:"مبتدئ",ico:"↩️"}],
+  legs:      [{id:"l1",n:"سكوات",sets:"4",reps:"8-12",rest:"120ث",lvl:"متقدم",ico:"🦵"},{id:"l2",n:"ليج برس",sets:"4",reps:"12-15",rest:"90ث",lvl:"متوسط",ico:"🦶"},{id:"l3",n:"لنج",sets:"3",reps:"12 لكل رجل",rest:"60ث",lvl:"مبتدئ",ico:"🚶"},{id:"l4",n:"ليج كيرل",sets:"3",reps:"12-15",rest:"60ث",lvl:"مبتدئ",ico:"🔁"}],
+  shoulders: [{id:"s1",n:"شولدر برس",sets:"4",reps:"10-12",rest:"90ث",lvl:"متوسط",ico:"🙌"},{id:"s2",n:"لاترال رايز",sets:"3",reps:"15",rest:"60ث",lvl:"مبتدئ",ico:"↔️"},{id:"s3",n:"فرونت رايز",sets:"3",reps:"15",rest:"60ث",lvl:"مبتدئ",ico:"⬆️"}],
+  arms:      [{id:"a1",n:"باي كيرل بالبار",sets:"4",reps:"10-12",rest:"75ث",lvl:"مبتدئ",ico:"💪"},{id:"a2",n:"تراي بوش داون",sets:"4",reps:"12-15",rest:"60ث",lvl:"مبتدئ",ico:"👇"},{id:"a3",n:"هامر كيرل",sets:"3",reps:"12",rest:"60ث",lvl:"مبتدئ",ico:"🔨"},{id:"a4",n:"سكول كراشر",sets:"3",reps:"12",rest:"75ث",lvl:"متوسط",ico:"💀"}],
+  cardio:    [{id:"cd1",n:"تريدميل",sets:"1",reps:"30 دقيقة",rest:"-",lvl:"مبتدئ",ico:"🏃"},{id:"cd2",n:"رويينج",sets:"1",reps:"20 دقيقة",rest:"-",lvl:"متوسط",ico:"🚣"},{id:"cd3",n:"HIIT",sets:"8",reps:"30 ثانية",rest:"30ث",lvl:"متقدم",ico:"⚡"}],
+};
+const MU = { chest:"صدر", back:"ظهر", legs:"أرجل", shoulders:"أكتاف", arms:"أذرع", cardio:"كارديو" };
+
+const PLANS = {
+  "3days": { label:"3 أيام / أسبوع", days:[{d:"الاثنين",mu:["chest","arms"],lbl:"صدر + أذرع"},{d:"الأربعاء",mu:["back","shoulders"],lbl:"ظهر + أكتاف"},{d:"الجمعة",mu:["legs","cardio"],lbl:"أرجل + كارديو"}] },
+  "5days": { label:"5 أيام / أسبوع", days:[{d:"الاثنين",mu:["chest"],lbl:"صدر"},{d:"الثلاثاء",mu:["back"],lbl:"ظهر"},{d:"الأربعاء",mu:["legs"],lbl:"أرجل"},{d:"الخميس",mu:["shoulders","arms"],lbl:"أكتاف + أذرع"},{d:"الجمعة",mu:["cardio"],lbl:"كارديو"}] },
+  "6days": { label:"6 أيام / أسبوع", days:[{d:"الاثنين",mu:["chest","arms"],lbl:"صدر + ترايسبس"},{d:"الثلاثاء",mu:["back","arms"],lbl:"ظهر + بايسبس"},{d:"الأربعاء",mu:["legs"],lbl:"أرجل أمام"},{d:"الخميس",mu:["shoulders"],lbl:"أكتاف"},{d:"الجمعة",mu:["chest","back"],lbl:"صدر + ظهر"},{d:"السبت",mu:["legs","cardio"],lbl:"أرجل خلف + كارديو"}] },
+};
+
+const CHALLENGES = [
+  {id:1,title:"تحدي ١٠٠ ضغط",desc:"أنجز ١٠٠ تمرين ضغط خلال الأسبوع",pts:50,ico:"🏆"},
+  {id:2,title:"تحدي الحضور الكامل",desc:"احضر جميع أيام تدريبك هذا الأسبوع",pts:75,ico:"🌟"},
+  {id:3,title:"تحدي الكارديو",desc:"نفّذ ٣ جلسات كارديو هذا الأسبوع",pts:40,ico:"🔥"},
+  {id:4,title:"تحدي التسجيل اليومي",desc:"سجّل وزنك يومياً لمدة ٧ أيام",pts:30,ico:"📊"},
+];
+
+const TIPS = {
+  recovery:["نم ٧-٩ ساعات يومياً لتحقيق أفضل استشفاء عضلي","اشرب ٣-٤ لترات ماء يومياً لترطيب العضلات","تناول بروتيناً خلال ساعة بعد التمرين لبناء العضل","خصص يوماً للراحة الفعّالة: مشي خفيف وتمدد","استخدم الفوم رولر للتخفيف من آلام العضلات","الساونا والحمام البارد يسرعان الاستشفاء"],
+  injury:["في حالة آلام حادة توقف فوراً ولا تكمل التمرين","آلام الركبة: راجع مدربك لتعديل حركة السكوات","آلام الظهر: تجنب الديدليفت وركز على التمدد","آلام الكتف: استبدل تمارين الضغط بالكابل مؤقتاً","RICE للإصابات البسيطة: راحة، ثلج، ضغط، رفع","لا تعود للتمرين قبل الشفاء الكامل من الإصابة"],
+};
+
+const calcCals = (w, h, goal) => {
+  const tdee = (10*w + 6.25*h - 5*25 + 5) * 1.55;
+  if (goal==="bulk") return Math.round(tdee+400);
+  if (goal==="cut")  return Math.round(tdee-500);
+  return Math.round(tdee);
+};
+const fatLabel = (f) => {
+  if (f<6)  return {t:"رياضي نخبة",c:"#00ff88"};
+  if (f<14) return {t:"رياضي",c:"#4ade80"};
+  if (f<18) return {t:"لياقة جيدة",c:"#facc15"};
+  if (f<25) return {t:"مقبول",c:"#fb923c"};
+  return      {t:"يحتاج تحسين",c:"#f87171"};
+};
+
+// ─── CSS ───────────────────────────────────────────────────────
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Bebas+Neue&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a0a0a;color:#e8e0d0;font-family:'Tajawal',sans-serif;direction:rtl;user-select:none;-webkit-user-select:none;overflow-x:hidden;}
+:root{--gold:#D4AF37;--gd:#8B6914;--dark:#111;--d2:#1a1a1a;--d3:#222;--gray:#333;--dim:#777;--red:#ff4455;--green:#00cc66;--blue:#4499ff;}
+body::after{content:'COACH PRO © محمي بحقوق الملكية';position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:rgba(212,175,55,0.28);letter-spacing:3px;pointer-events:none;z-index:9999;white-space:nowrap;}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,#1a1200,#0a0a0a 70%);}
+.lbox{background:var(--d2);border:1px solid var(--gd);border-radius:20px;padding:44px 36px;width:360px;max-width:94vw;box-shadow:0 0 60px rgba(212,175,55,0.07);}
+.llogo{text-align:center;margin-bottom:28px;}
+.llogo h1{font-family:'Bebas Neue',sans-serif;font-size:44px;color:var(--gold);letter-spacing:5px;line-height:1;}
+.llogo p{color:var(--dim);font-size:13px;margin-top:5px;}
+.tabs{display:flex;gap:8px;margin-bottom:24px;justify-content:center;}
+.tab{padding:6px 20px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid var(--gray);color:var(--dim);transition:.2s;}
+.tab.on{background:var(--gold);color:#000;font-weight:700;border-color:var(--gold);}
+.fi{margin-bottom:14px;}
+.fi label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px;}
+.fi input{width:100%;background:var(--d3);border:1px solid var(--gray);border-radius:10px;padding:11px 13px;color:#e8e0d0;font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:border .2s;direction:ltr;text-align:right;}
+.fi input:focus{border-color:var(--gold);}
+.btn-login{width:100%;background:linear-gradient(135deg,var(--gold),var(--gd));color:#000;border:none;border-radius:10px;padding:13px;font-family:'Tajawal',sans-serif;font-size:16px;font-weight:700;cursor:pointer;margin-top:6px;transition:.2s;}
+.btn-login:hover{opacity:.88;}
+.err{color:var(--red);font-size:13px;text-align:center;margin-top:10px;}
+.hint{text-align:center;font-size:11px;color:var(--dim);margin-top:10px;}
+.wrap{display:flex;min-height:100vh;}
+.sb{width:228px;background:var(--d2);border-left:1px solid #1c1c1c;display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sblogo{padding:20px 16px;border-bottom:1px solid #1c1c1c;text-align:center;}
+.sblogo h2{font-family:'Bebas Neue',sans-serif;font-size:27px;color:var(--gold);letter-spacing:3px;}
+.sblogo p{font-size:11px;color:var(--dim);margin-top:2px;}
+.ubadge{margin:12px;padding:11px;background:var(--d3);border-radius:10px;border:1px solid var(--gray);}
+.ubadge .uname{font-weight:700;font-size:14px;}
+.ubadge .urole{font-size:11px;color:var(--gold);margin-top:2px;}
+.ubadge .upts{font-size:11px;color:var(--dim);margin-top:3px;}
+.nsec{padding:5px 0;}
+.nstitle{padding:7px 16px 3px;font-size:10px;color:var(--dim);letter-spacing:2px;}
+.ni{display:flex;align-items:center;gap:9px;padding:10px 16px;cursor:pointer;font-size:14px;color:var(--dim);transition:.15s;border-right:3px solid transparent;}
+.ni:hover{background:var(--d3);color:#e8e0d0;}
+.ni.on{background:rgba(212,175,55,0.08);color:var(--gold);border-right-color:var(--gold);}
+.nico{font-size:16px;width:20px;text-align:center;}
+.logout{margin:12px;padding:9px;border:1px solid var(--gray);border-radius:9px;text-align:center;cursor:pointer;color:var(--dim);font-size:13px;transition:.2s;}
+.logout:hover{border-color:var(--red);color:var(--red);}
+.main{flex:1;padding:24px;overflow-y:auto;background:#0a0a0a;}
+.ptitle{font-size:23px;font-weight:800;color:var(--gold);margin-bottom:5px;}
+.psub{font-size:13px;color:var(--dim);margin-bottom:22px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:18px;}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin-bottom:18px;}
+.sc{background:var(--d2);border:1px solid #1c1c1c;border-radius:12px;padding:16px;position:relative;overflow:hidden;}
+.sc::before{content:'';position:absolute;top:0;right:0;width:45px;height:45px;border-radius:0 0 0 45px;background:rgba(212,175,55,0.05);}
+.sc .sl{font-size:12px;color:var(--dim);margin-bottom:6px;}
+.sc .sv{font-size:24px;font-weight:800;line-height:1;}
+.sc .si{position:absolute;top:13px;left:13px;font-size:19px;opacity:.55;}
+.sc .ss{font-size:11px;color:var(--dim);margin-top:5px;}
+.sc.gold{border-color:var(--gd);background:linear-gradient(135deg,#1a1200,#111);}
+.sc.gold .sv{color:var(--gold);}
+.box{background:var(--d2);border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:16px;}
+.boxh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.boxt{font-size:15px;font-weight:700;}
+.boxb{font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(212,175,55,0.1);color:var(--gold);border:1px solid var(--gd);}
+table{width:100%;border-collapse:collapse;}
+th{text-align:right;padding:9px 12px;font-size:12px;color:var(--dim);border-bottom:1px solid #1c1c1c;font-weight:500;}
+td{padding:10px 12px;font-size:13px;border-bottom:1px solid #111;vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,0.015);}
+.p{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.pg{background:rgba(212,175,55,.13);color:var(--gold);}
+.pgreen{background:rgba(0,204,102,.11);color:var(--green);}
+.pred{background:rgba(255,68,85,.11);color:var(--red);}
+.pblue{background:rgba(68,153,255,.11);color:var(--blue);}
+.mtabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
+.mtab{padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid var(--gray);color:var(--dim);transition:.15s;background:transparent;font-family:'Tajawal',sans-serif;}
+.mtab:hover{border-color:var(--gd);color:#e8e0d0;}
+.mtab.on{background:var(--gold);color:#000;font-weight:700;border-color:var(--gold);}
+.exgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.excard{background:var(--d3);border:1px solid #2a2a2a;border-radius:10px;padding:14px;transition:.2s;}
+.excard:hover{border-color:var(--gd);transform:translateY(-2px);}
+.exicon{font-size:24px;margin-bottom:8px;}
+.exname{font-size:14px;font-weight:700;margin-bottom:7px;}
+.exmeta{display:flex;gap:5px;flex-wrap:wrap;}
+.extag{font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.05);color:var(--dim);}
+.sched{display:grid;gap:8px;}
+.sday{background:var(--d3);border:1px solid #2a2a2a;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:13px;transition:.2s;}
+.sday:hover{border-color:var(--gd);}
+.sdname{font-weight:700;min-width:72px;color:var(--gold);font-size:14px;}
+.sdlbl{font-size:13px;}
+.sdmu{display:flex;gap:5px;flex-wrap:wrap;margin-right:auto;}
+.pbwrap{margin:6px 0;}
+.pblabel{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:3px;}
+.pbbg{height:7px;border-radius:4px;background:var(--d3);overflow:hidden;}
+.pbfill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gd),var(--gold));transition:width 1s;}
+.chart{display:flex;align-items:flex-end;gap:5px;height:78px;margin-top:10px;}
+.bwrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end;}
+.bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--gold),var(--gd));min-height:4px;transition:height .8s;}
+.blbl{font-size:9px;color:var(--dim);}
+.bval{font-size:9px;color:var(--gold);}
+.chl{display:grid;gap:10px;}
+.chi{background:var(--d3);border:1px solid #2a2a2a;border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;transition:.2s;}
+.chi:hover{border-color:var(--gd);}
+.chico{font-size:26px;}
+.chinfo{flex:1;}
+.chtitle{font-weight:700;font-size:14px;}
+.chdesc{font-size:12px;color:var(--dim);margin-top:3px;}
+.chpts{padding:5px 12px;background:rgba(212,175,55,.1);border:1px solid var(--gd);border-radius:20px;color:var(--gold);font-weight:700;font-size:13px;}
+.tipgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.tip{background:var(--d3);border-right:3px solid var(--gd);border-radius:0 9px 9px 0;padding:10px 12px;font-size:13px;line-height:1.7;}
+.grow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;}
+.gf label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px;}
+.gf input,.gf select{width:100%;background:var(--d3);border:1px solid var(--gray);border-radius:8px;padding:9px 11px;color:#e8e0d0;font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:border .2s;}
+.gf input:focus,.gf select:focus{border-color:var(--gold);}
+.gf select option{background:var(--d3);}
+.btn{padding:7px 14px;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;border:none;}
+.btn-p{background:var(--gold);color:#000;}
+.btn-p:hover{opacity:.85;}
+.btn-d{background:rgba(255,68,85,.14);color:var(--red);border:1px solid rgba(255,68,85,.3);}
+.btn-d:hover{background:rgba(255,68,85,.25);}
+.btn-o{background:transparent;color:var(--dim);border:1px solid var(--gray);}
+.btn-o:hover{border-color:var(--gold);color:var(--gold);}
+.cres{background:linear-gradient(135deg,#1a1200,#111);border:1px solid var(--gd);border-radius:10px;padding:16px;margin-top:13px;}
+.cres h3{font-size:13px;color:var(--dim);margin-bottom:10px;}
+.cnums{display:flex;gap:16px;flex-wrap:wrap;}
+.cnum .n{font-size:24px;font-weight:800;color:var(--gold);}
+.cnum .l{font-size:11px;color:var(--dim);margin-top:1px;}
+.litem{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:9px;margin-bottom:7px;background:var(--d3);border:1px solid #2a2a2a;}
+.litem:hover{border-color:var(--gd);}
+.lrank{font-size:17px;font-weight:800;width:28px;text-align:center;}
+.lname{flex:1;font-weight:600;font-size:14px;}
+.lpts{color:var(--gold);font-weight:700;}
+.mph{display:flex;align-items:center;gap:16px;background:var(--d2);border:1px solid #1c1c1c;border-radius:12px;padding:20px;margin-bottom:16px;}
+.av{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--gd),var(--gold));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#000;flex-shrink:0;}
+.minfo h2{font-size:18px;font-weight:800;}
+.minfo p{font-size:13px;color:var(--dim);margin-top:3px;}
+.mstats{display:flex;gap:20px;margin-top:9px;flex-wrap:wrap;}
+.ms .mv{font-size:18px;font-weight:700;color:var(--gold);}
+.ms .ml{font-size:11px;color:var(--dim);}
+.notif{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-70px);background:var(--d2);border:1px solid var(--gd);border-radius:9px;padding:10px 20px;font-size:14px;color:var(--gold);z-index:9999;transition:transform .3s;white-space:nowrap;}
+.notif.show{transform:translateX(-50%) translateY(0);}
+@media(max-width:680px){
+  .sb{width:52px;}
+  .sblogo p,.ubadge .uname,.ubadge .urole,.ubadge .upts,.nstitle,.ni span,.logout span{display:none;}
+  .ni{justify-content:center;padding:12px;}
+  .g4,.g3{grid-template-columns:1fr 1fr;}
+  .g2{grid-template-columns:1fr;}
+  .tipgrid,.grow{grid-template-columns:1fr;}
+  .main{padding:12px;}
+}
+`;
+
+// ─── COMPONENTS ────────────────────────────────────────────────
+function Notif({ msg }) {
+  return <div className={"notif" + (msg ? " show" : "")}>{msg}</div>;
+}
+
+function Login({ onLogin }) {
+  const [mode, setMode] = useState("trainer");
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+
+  const go = () => {
+    setErr("");
+    if (mode === "trainer") {
+      if (u === TRAINER.username && p === TRAINER.password) onLogin({ role:"trainer", name:"المدرب الشخصي" });
+      else setErr("بيانات الدخول غير صحيحة");
+    } else {
+      const m = INIT_MEMBERS.find(x => x.username===u && x.password===p);
+      if (m) onLogin({ ...m, role:"member" });
+      else setErr("بيانات الدخول غير صحيحة");
+    }
+  };
+
+  return (
+    <div className="login">
+      <div className="lbox">
+        <div className="llogo"><h1>COACH PRO</h1><p>منصة التدريب الشخصي المتكاملة</p></div>
+        <div className="tabs">
+          <div className={"tab"+(mode==="trainer"?" on":"")} onClick={()=>{setMode("trainer");setErr("");}}>مدرب</div>
+          <div className={"tab"+(mode==="member"?" on":"")} onClick={()=>{setMode("member");setErr("");}}>متدرب</div>
+        </div>
+        <div className="fi"><label>اسم المستخدم</label>
+          <input value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder={mode==="trainer"?"coach_admin":"ahmed"} />
+        </div>
+        <div className="fi"><label>كلمة المرور</label>
+          <input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="••••••••" />
+        </div>
+        <button className="btn-login" onClick={go}>دخول</button>
+        {err && <div className="err">{err}</div>}
+        <div className="hint">{mode==="trainer"?"coach_admin / Admin@2025":"ahmed / pass123"}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TRAINER ───────────────────────────────────────────────────
+function TrainerApp({ onLogout }) {
+  const [tab, setTab] = useState("overview");
+  const [members, setMembers] = useState(INIT_MEMBERS);
+  const [sel, setSel] = useState(null);
+  const [mTab, setMTab] = useState("chest");
+  const [tipTab, setTipTab] = useState("recovery");
+  const [notif, setNotif] = useState("");
+  const [cd, setCd] = useState({ w:"", h:"", goal:"bulk" });
+  const [cdRes, setCdRes] = useState(null);
+  const [nm, setNm] = useState({ name:"", username:"", password:"", plan:"3days", goal:"bulk", weight:"", height:"", fat:"" });
+
+  const toast = (m) => { setNotif(m); setTimeout(()=>setNotif(""), 2400); };
+  const addMember = () => {
+    if (!nm.name||!nm.username||!nm.password) { toast("⚠️ يرجى ملء الحقول المطلوبة"); return; }
+    setMembers(p=>[...p,{...nm,id:Date.now(),points:0,joined:new Date().toISOString().slice(0,10),weight:+nm.weight,height:+nm.height,fat:+nm.fat,progress:[]}]);
+    setNm({ name:"", username:"", password:"", plan:"3days", goal:"bulk", weight:"", height:"", fat:"" });
+    toast("✅ تم إضافة المتدرب");
+  };
+  const delMember = (id) => { setMembers(p=>p.filter(m=>m.id!==id)); setSel(null); toast("🗑️ تم الحذف"); };
+  const givePoints = (id, pts) => { setMembers(p=>p.map(m=>m.id===id?{...m,points:m.points+pts}:m)); toast(`⭐ +${pts} نقطة`); };
+  const sorted = [...members].sort((a,b)=>b.points-a.points);
+
+  const Nav = ({k,ico,lbl}) => (
+    <div className={"ni"+(tab===k?" on":"")} onClick={()=>{setTab(k);setSel(null);}}>
+      <span className="nico">{ico}</span><span>{lbl}</span>
+    </div>
+  );
+
+  const Sidebar = () => (
+    <div className="sb">
+      <div className="sblogo"><h2>COACH PRO</h2><p>لوحة المدرب</p></div>
+      <div className="ubadge"><div className="uname">👑 المدرب الشخصي</div><div className="urole">صلاحيات كاملة</div></div>
+      <div className="nsec">
+        <div className="nstitle">الإدارة</div>
+        <Nav k="overview" ico="📊" lbl="نظرة عامة" />
+        <Nav k="members"  ico="👥" lbl="المتدربون" />
+        <Nav k="exercises" ico="🏋️" lbl="التمارين" />
+        <Nav k="plans"    ico="📅" lbl="البرامج" />
+      </div>
+      <div className="nsec">
+        <div className="nstitle">الأدوات</div>
+        <Nav k="calculator"  ico="🔢" lbl="السعرات" />
+        <Nav k="challenges"  ico="🏆" lbl="التحديات" />
+        <Nav k="tips"        ico="💡" lbl="نصائح" />
+        <Nav k="leaderboard" ico="🌟" lbl="لوحة الشرف" />
+      </div>
+      <div className="logout" onClick={onLogout}><span>🚪 خروج</span></div>
+    </div>
+  );
+
+  // Member detail
+  if (tab==="members" && sel) {
+    const m = members.find(x=>x.id===sel) || {};
+    const fl = fatLabel(m.fat||0);
+    const cs = calcCals(m.weight||0, m.height||0, m.goal||"bulk");
+    const maxW = m.progress&&m.progress.length ? Math.max(...m.progress.map(p=>p.w)) : (m.weight||80);
+    return (
+      <div className="wrap">
+        <Notif msg={notif} />
+        <Sidebar />
+        <div className="main">
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+            <button className="btn btn-o" onClick={()=>setSel(null)}>← رجوع</button>
+            <div className="ptitle" style={{margin:0}}>ملف المتدرب</div>
+          </div>
+          <div className="mph">
+            <div className="av">{(m.name||"؟")[0]}</div>
+            <div className="minfo">
+              <h2>{m.name}</h2>
+              <p>@{m.username} · انضم {m.joined}</p>
+              <div className="mstats">
+                <div className="ms"><div className="mv">{m.weight} كجم</div><div className="ml">الوزن</div></div>
+                <div className="ms"><div className="mv">{m.height} سم</div><div className="ml">الطول</div></div>
+                <div className="ms"><div className="mv" style={{color:fl.c}}>{m.fat}%</div><div className="ml">الدهون</div></div>
+                <div className="ms"><div className="mv">⭐{m.points}</div><div className="ml">النقاط</div></div>
+              </div>
+            </div>
+            <div style={{marginRight:"auto",textAlign:"center"}}>
+              <div style={{fontSize:12,color:"var(--dim)"}}>تصنيف الدهون</div>
+              <div style={{fontSize:15,fontWeight:700,color:fl.c,marginTop:4}}>{fl.t}</div>
+              <div style={{fontSize:12,color:"var(--dim)",marginTop:8}}>البرنامج</div>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--gold)",marginTop:4}}>{PLANS[m.plan]?.label}</div>
+            </div>
+          </div>
+          <div className="g3">
+            <div className="sc gold"><div className="sl">السعرات/يوم</div><div className="sv">{cs}</div><div className="si">🔥</div></div>
+            <div className="sc"><div className="sl">البروتين/يوم</div><div className="sv">{Math.round((m.weight||0)*2.2)}g</div><div className="si">🥩</div></div>
+            <div className="sc"><div className="sl">هدف الأسبوع</div><div className="sv">{m.goal==="bulk"?"+0.5kg":"-0.5kg"}</div><div className="si">🎯</div></div>
+          </div>
+          {m.progress && m.progress.length>0 && (
+            <div className="box">
+              <div className="boxt" style={{marginBottom:10}}>📈 تطور الوزن</div>
+              <div className="chart">
+                {m.progress.map((p,i)=>(
+                  <div className="bwrap" key={i}>
+                    <div className="bval">{p.w}</div>
+                    <div className="bar" style={{height:`${(p.w/maxW)*65}px`}}/>
+                    <div className="blbl">{p.m}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="box">
+            <div className="boxt" style={{marginBottom:12}}>📅 الجدول الأسبوعي</div>
+            <div className="sched">
+              {PLANS[m.plan]?.days.map((d,i)=>(
+                <div className="sday" key={i}>
+                  <div className="sdname">{d.d}</div>
+                  <div className="sdlbl">{d.lbl}</div>
+                  <div className="sdmu">{d.mu.map(mu=><span className="p pblue" key={mu}>{MU[mu]}</span>)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button className="btn btn-p" onClick={()=>givePoints(m.id,25)}>+ منح 25 نقطة</button>
+            <button className="btn btn-d" onClick={()=>delMember(m.id)}>حذف المتدرب</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="wrap">
+      <Notif msg={notif} />
+      <Sidebar />
+      <div className="main">
+
+        {tab==="overview" && <>
+          <div className="ptitle">لوحة التحكم</div>
+          <div className="psub">ملخص النظام</div>
+          <div className="g4">
+            <div className="sc gold"><div className="sl">إجمالي المتدربين</div><div className="sv">{members.length}</div><div className="si">👥</div></div>
+            <div className="sc"><div className="sl">برنامج 6 أيام</div><div className="sv">{members.filter(m=>m.plan==="6days").length}</div><div className="si">🔥</div></div>
+            <div className="sc"><div className="sl">برنامج 5 أيام</div><div className="sv">{members.filter(m=>m.plan==="5days").length}</div><div className="si">⚡</div></div>
+            <div className="sc"><div className="sl">برنامج 3 أيام</div><div className="sv">{members.filter(m=>m.plan==="3days").length}</div><div className="si">📅</div></div>
+          </div>
+          <div className="g2">
+            <div className="box">
+              <div className="boxh"><div className="boxt">المتدربون</div><div className="boxb">{members.length}</div></div>
+              <table><thead><tr><th>الاسم</th><th>البرنامج</th><th>الهدف</th><th>النقاط</th></tr></thead>
+              <tbody>{members.map(m=>(
+                <tr key={m.id}>
+                  <td>{m.name}</td>
+                  <td><span className="p pblue">{PLANS[m.plan]?.label}</span></td>
+                  <td><span className={"p "+(m.goal==="bulk"?"pgreen":"pred")}>{m.goal==="bulk"?"تضخيم":"تنشيف"}</span></td>
+                  <td><span className="p pg">⭐{m.points}</span></td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+            <div className="box">
+              <div className="boxh"><div className="boxt">أفضل المتدربين</div><div className="boxb">🏆</div></div>
+              {sorted.slice(0,4).map((m,i)=>(
+                <div className="litem" key={m.id}>
+                  <div className="lrank">{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</div>
+                  <div className="lname">{m.name}</div>
+                  <div className="lpts">⭐{m.points}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>}
+
+        {tab==="members" && <>
+          <div className="ptitle">إدارة المتدربين</div>
+          <div className="psub">إضافة وإدارة المشتركين</div>
+          <div className="box">
+            <div className="boxh"><div className="boxt">إضافة متدرب جديد</div></div>
+            <div className="grow">
+              <div className="gf"><label>الاسم *</label><input value={nm.name} onChange={e=>setNm(p=>({...p,name:e.target.value}))} placeholder="اسم المتدرب"/></div>
+              <div className="gf"><label>اسم المستخدم *</label><input value={nm.username} onChange={e=>setNm(p=>({...p,username:e.target.value}))} placeholder="username"/></div>
+            </div>
+            <div className="grow">
+              <div className="gf"><label>كلمة المرور *</label><input type="password" value={nm.password} onChange={e=>setNm(p=>({...p,password:e.target.value}))} placeholder="••••••"/></div>
+              <div className="gf"><label>البرنامج</label><select value={nm.plan} onChange={e=>setNm(p=>({...p,plan:e.target.value}))}><option value="3days">3 أيام</option><option value="5days">5 أيام</option><option value="6days">6 أيام</option></select></div>
+            </div>
+            <div className="grow">
+              <div className="gf"><label>الهدف</label><select value={nm.goal} onChange={e=>setNm(p=>({...p,goal:e.target.value}))}><option value="bulk">تضخيم</option><option value="cut">تنشيف</option><option value="maintain">حفاظ</option></select></div>
+              <div className="gf"><label>الوزن (كجم)</label><input type="number" value={nm.weight} onChange={e=>setNm(p=>({...p,weight:e.target.value}))} placeholder="80"/></div>
+            </div>
+            <div className="grow">
+              <div className="gf"><label>الطول (سم)</label><input type="number" value={nm.height} onChange={e=>setNm(p=>({...p,height:e.target.value}))} placeholder="175"/></div>
+              <div className="gf"><label>نسبة الدهون %</label><input type="number" value={nm.fat} onChange={e=>setNm(p=>({...p,fat:e.target.value}))} placeholder="20"/></div>
+            </div>
+            <button className="btn btn-p" onClick={addMember}>➕ إضافة المتدرب</button>
+          </div>
+          <div className="box">
+            <div className="boxh"><div className="boxt">قائمة المتدربين</div><div className="boxb">{members.length}</div></div>
+            <table><thead><tr><th>الاسم</th><th>البرنامج</th><th>الهدف</th><th>الوزن</th><th>الدهون</th><th>النقاط</th><th>إجراءات</th></tr></thead>
+            <tbody>{members.map(m=>(
+              <tr key={m.id}>
+                <td><strong>{m.name}</strong><div style={{fontSize:11,color:"var(--dim)"}}>@{m.username}</div></td>
+                <td><span className="p pblue">{PLANS[m.plan]?.label}</span></td>
+                <td><span className={"p "+(m.goal==="bulk"?"pgreen":"pred")}>{m.goal==="bulk"?"تضخيم":"تنشيف"}</span></td>
+                <td>{m.weight} كجم</td>
+                <td><span style={{color:fatLabel(m.fat||0).c}}>{m.fat}%</span></td>
+                <td><span className="p pg">⭐{m.points}</span></td>
+                <td><div style={{display:"flex",gap:5}}>
+                  <button className="btn btn-o" onClick={()=>setSel(m.id)}>عرض</button>
+                  <button className="btn btn-p" onClick={()=>givePoints(m.id,10)}>+10⭐</button>
+                  <button className="btn btn-d" onClick={()=>delMember(m.id)}>حذف</button>
+                </div></td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        </>}
+
+        {tab==="exercises" && <>
+          <div className="ptitle">مكتبة التمارين</div>
+          <div className="psub">جميع التمارين المبرمجة</div>
+          <div className="mtabs">{Object.keys(EX).map(k=><div key={k} className={"mtab"+(mTab===k?" on":"")} onClick={()=>setMTab(k)}>{MU[k]}</div>)}</div>
+          <div className="exgrid">{EX[mTab].map(ex=>(
+            <div className="excard" key={ex.id}>
+              <div className="exicon">{ex.ico}</div>
+              <div className="exname">{ex.n}</div>
+              <div className="exmeta">
+                <span className="extag">🔢 {ex.sets} سيت</span>
+                <span className="extag">↩️ {ex.reps}</span>
+                <span className="extag">⏱️ {ex.rest}</span>
+                <span className={"p "+(ex.lvl==="مبتدئ"?"pgreen":ex.lvl==="متوسط"?"pg":"pred")}>{ex.lvl}</span>
+              </div>
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="plans" && <>
+          <div className="ptitle">برامج التدريب</div>
+          <div className="psub">الأنماط المتاحة</div>
+          {Object.entries(PLANS).map(([k,pl])=>(
+            <div className="box" key={k}>
+              <div className="boxh"><div className="boxt">{pl.label}</div><div className="boxb">{members.filter(m=>m.plan===k).length} متدرب</div></div>
+              <div className="sched">{pl.days.map((d,i)=>(
+                <div className="sday" key={i}>
+                  <div className="sdname">{d.d}</div><div className="sdlbl">{d.lbl}</div>
+                  <div className="sdmu">{d.mu.map(mu=><span className="p pblue" key={mu}>{MU[mu]}</span>)}</div>
+                </div>
+              ))}</div>
+            </div>
+          ))}
+        </>}
+
+        {tab==="calculator" && <>
+          <div className="ptitle">حاسبة السعرات</div>
+          <div className="psub">احسب السعرات والمغذيات</div>
+          <div className="box">
+            <div className="grow">
+              <div className="gf"><label>الوزن (كجم)</label><input type="number" value={cd.w} onChange={e=>setCd(p=>({...p,w:e.target.value}))} placeholder="80"/></div>
+              <div className="gf"><label>الطول (سم)</label><input type="number" value={cd.h} onChange={e=>setCd(p=>({...p,h:e.target.value}))} placeholder="175"/></div>
+            </div>
+            <div className="grow">
+              <div className="gf"><label>الهدف</label><select value={cd.goal} onChange={e=>setCd(p=>({...p,goal:e.target.value}))}><option value="bulk">تضخيم</option><option value="cut">تنشيف</option><option value="maintain">حفاظ</option></select></div>
+            </div>
+            <button className="btn btn-p" onClick={()=>{
+              if(!cd.w||!cd.h)return;
+              const c=calcCals(+cd.w,+cd.h,cd.goal);
+              setCdRes({c,pro:Math.round(+cd.w*2.2),carb:Math.round((c*.45)/4),fat:Math.round((c*.25)/9)});
+            }}>احسب الآن</button>
+            {cdRes && <div className="cres"><h3>النتيجة</h3><div className="cnums">
+              <div className="cnum"><div className="n">{cdRes.c}</div><div className="l">سعرة/يوم</div></div>
+              <div className="cnum"><div className="n" style={{color:"#4ade80"}}>{cdRes.pro}g</div><div className="l">بروتين</div></div>
+              <div className="cnum"><div className="n" style={{color:"#facc15"}}>{cdRes.carb}g</div><div className="l">كربوهيدرات</div></div>
+              <div className="cnum"><div className="n" style={{color:"#fb923c"}}>{cdRes.fat}g</div><div className="l">دهون</div></div>
+            </div></div>}
+          </div>
+          <div className="box">
+            <div className="boxt" style={{marginBottom:12}}>جدول تصنيف نسبة الدهون</div>
+            {[[5,"رياضي نخبة","#00ff88"],[14,"رياضي","#4ade80"],[17,"لياقة جيدة","#facc15"],[24,"مقبول","#fb923c"],[32,"يحتاج تحسين","#f87171"]].map(([v,l,c])=>(
+              <div className="pbwrap" key={l}>
+                <div className="pblabel"><span style={{color:c}}>{l}</span><span>{v}%</span></div>
+                <div className="pbbg"><div className="pbfill" style={{width:`${(v/35)*100}%`,background:`linear-gradient(90deg,${c}55,${c})`}}/></div>
+              </div>
+            ))}
+          </div>
+        </>}
+
+        {tab==="challenges" && <>
+          <div className="ptitle">التحديات الأسبوعية</div>
+          <div className="psub">حفّز متدربيك</div>
+          <div className="chl">{CHALLENGES.map(ch=>(
+            <div className="chi" key={ch.id}>
+              <div className="chico">{ch.ico}</div>
+              <div className="chinfo"><div className="chtitle">{ch.title}</div><div className="chdesc">{ch.desc}</div></div>
+              <div className="chpts">+{ch.pts} ⭐</div>
+            </div>
+          ))}</div>
+          <div className="box" style={{marginTop:16}}>
+            <div className="boxt" style={{marginBottom:12}}>منح نقاط للمتدربين</div>
+            <table><thead><tr><th>المتدرب</th><th>النقاط</th><th>منح</th></tr></thead>
+            <tbody>{members.map(m=>(
+              <tr key={m.id}>
+                <td><strong>{m.name}</strong></td>
+                <td><span className="p pg">⭐{m.points}</span></td>
+                <td><div style={{display:"flex",gap:5}}>{[10,25,50].map(pts=><button key={pts} className="btn btn-p" onClick={()=>givePoints(m.id,pts)}>+{pts}</button>)}</div></td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        </>}
+
+        {tab==="tips" && <>
+          <div className="ptitle">نصائح الاستشفاء والإصابات</div>
+          <div className="psub">إرشادات للمتدربين</div>
+          <div style={{display:"flex",gap:10,marginBottom:16}}>
+            <div className={"tab"+(tipTab==="recovery"?" on":"")} onClick={()=>setTipTab("recovery")} style={{cursor:"pointer"}}>🛌 الاستشفاء</div>
+            <div className={"tab"+(tipTab==="injury"?" on":"")} onClick={()=>setTipTab("injury")} style={{cursor:"pointer"}}>🩹 الإصابات</div>
+          </div>
+          <div className="tipgrid">{TIPS[tipTab].map((t,i)=>(
+            <div className="tip" key={i}>
+              <span style={{color:"var(--gold)",marginLeft:7}}>{tipTab==="recovery"?["💤","💧","🥩","🚶","🔄","🧊"][i]:["⛔","🦵","🔙","🙌","🧊","⏳"][i]}</span>{t}
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="leaderboard" && <>
+          <div className="ptitle">لوحة الشرف</div>
+          <div className="psub">أفضل المتدربين التزاماً</div>
+          {sorted.map((m,i)=>(
+            <div className="litem" key={m.id}>
+              <div className="lrank">{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</div>
+              <div className="av" style={{width:36,height:36,fontSize:14}}>{m.name[0]}</div>
+              <div style={{flex:1}}>
+                <div className="lname">{m.name}</div>
+                <div style={{fontSize:11,color:"var(--dim)"}}>{PLANS[m.plan]?.label} · {m.goal==="bulk"?"تضخيم":"تنشيف"}</div>
+              </div>
+              <div className="lpts" style={{fontSize:16}}>⭐ {m.points}</div>
+            </div>
+          ))}
+        </>}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── MEMBER ────────────────────────────────────────────────────
+function MemberApp({ user, onLogout }) {
+  const [tab, setTab] = useState("home");
+  const [mems, setMems] = useState(INIT_MEMBERS);
+  const [mTab, setMTab] = useState("chest");
+  const [tipTab, setTipTab] = useState("recovery");
+  const [wIn, setWIn] = useState("");
+  const [notif, setNotif] = useState("");
+
+  const me = mems.find(m=>m.id===user.id) || user;
+  const fl = fatLabel(me.fat||0);
+  const cs = calcCals(me.weight||0, me.height||0, me.goal||"bulk");
+  const maxW = me.progress&&me.progress.length ? Math.max(...me.progress.map(p=>p.w)) : (me.weight||80);
+
+  const toast = (m) => { setNotif(m); setTimeout(()=>setNotif(""), 2400); };
+  const logW = () => {
+    if (!wIn) return;
+    const mn = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][new Date().getMonth()];
+    setMems(prev=>prev.map(mb=>mb.id===me.id?{...mb,weight:+wIn,progress:[...(mb.progress||[]),{m:mn,w:+wIn}]}:mb));
+    setWIn(""); toast("✅ تم تسجيل الوزن");
+  };
+
+  const Nav = ({k,ico,lbl}) => (
+    <div className={"ni"+(tab===k?" on":"")} onClick={()=>setTab(k)}>
+      <span className="nico">{ico}</span><span>{lbl}</span>
+    </div>
+  );
+
+  return (
+    <div className="wrap">
+      <Notif msg={notif} />
+      <div className="sb">
+        <div className="sblogo"><h2>COACH PRO</h2><p>لوحة المتدرب</p></div>
+        <div className="ubadge">
+          <div className="av" style={{width:36,height:36,fontSize:14,margin:"0 auto 7px"}}>{me.name[0]}</div>
+          <div className="uname">{me.name}</div>
+          <div className="urole">{me.goal==="bulk"?"🎯 تضخيم":"🔥 تنشيف"}</div>
+          <div className="upts">⭐ {me.points} نقطة</div>
+        </div>
+        <div className="nsec">
+          <Nav k="home"       ico="🏠" lbl="الرئيسية" />
+          <Nav k="myplan"     ico="📅" lbl="برنامجي" />
+          <Nav k="exercises"  ico="🏋️" lbl="التمارين" />
+          <Nav k="progress"   ico="📈" lbl="تقدمي" />
+          <Nav k="calculator" ico="🔢" lbl="السعرات" />
+          <Nav k="challenges" ico="🏆" lbl="التحديات" />
+          <Nav k="tips"       ico="💡" lbl="نصائح" />
+        </div>
+        <div className="logout" onClick={onLogout}><span>🚪 خروج</span></div>
+      </div>
+
+      <div className="main">
+
+        {tab==="home" && <>
+          <div className="ptitle">مرحباً، {me.name.split(" ")[0]}! 👋</div>
+          <div className="psub">{PLANS[me.plan]?.label} · {me.goal==="bulk"?"هدفك التضخيم":"هدفك التنشيف"}</div>
+          <div className="g4">
+            <div className="sc gold"><div className="sl">السعرات/يوم</div><div className="sv">{cs}</div><div className="si">🔥</div></div>
+            <div className="sc"><div className="sl">الوزن الحالي</div><div className="sv">{me.weight}</div><div className="si">⚖️</div><div className="ss">كجم</div></div>
+            <div className="sc"><div className="sl">نسبة الدهون</div><div className="sv" style={{color:fl.c}}>{me.fat}%</div><div className="si">📊</div><div className="ss">{fl.t}</div></div>
+            <div className="sc gold"><div className="sl">نقاطي</div><div className="sv">⭐{me.points}</div><div className="si">🏆</div></div>
+          </div>
+          <div className="box">
+            <div className="boxt" style={{marginBottom:12}}>تسجيل الوزن اليوم ⚖️</div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+              <div className="gf" style={{flex:1,margin:0}}><input type="number" value={wIn} onChange={e=>setWIn(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logW()} placeholder={`آخر تسجيل: ${me.weight} كجم`}/></div>
+              <button className="btn btn-p" onClick={logW}>تسجيل</button>
+            </div>
+          </div>
+          {me.progress&&me.progress.length>0 && (
+            <div className="box">
+              <div className="boxt" style={{marginBottom:10}}>📈 تطور وزنك</div>
+              <div className="chart">{me.progress.slice(-6).map((p,i)=>(
+                <div className="bwrap" key={i}>
+                  <div className="bval">{p.w}</div>
+                  <div className="bar" style={{height:`${(p.w/maxW)*65}px`}}/>
+                  <div className="blbl">{p.m}</div>
+                </div>
+              ))}</div>
+            </div>
+          )}
+        </>}
+
+        {tab==="myplan" && <>
+          <div className="ptitle">برنامجي الأسبوعي</div>
+          <div className="psub">{PLANS[me.plan]?.label}</div>
+          <div className="sched">{PLANS[me.plan]?.days.map((d,i)=>(
+            <div className="sday" key={i} style={{cursor:"pointer"}} onClick={()=>{setMTab(d.mu[0]);setTab("exercises");}}>
+              <div className="sdname">{d.d}</div>
+              <div className="sdlbl">{d.lbl}</div>
+              <div className="sdmu">{d.mu.map(mu=><span className="p pblue" key={mu}>{MU[mu]}</span>)}</div>
+              <span style={{fontSize:12,color:"var(--gold)",marginRight:"auto"}}>عرض ←</span>
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="exercises" && <>
+          <div className="ptitle">تمارين اليوم</div>
+          <div className="psub">اختر مجموعة العضلات</div>
+          <div className="mtabs">{Object.keys(EX).map(k=><div key={k} className={"mtab"+(mTab===k?" on":"")} onClick={()=>setMTab(k)}>{MU[k]}</div>)}</div>
+          <div className="exgrid">{EX[mTab].map(ex=>(
+            <div className="excard" key={ex.id}>
+              <div className="exicon">{ex.ico}</div>
+              <div className="exname">{ex.n}</div>
+              <div className="exmeta">
+                <span className="extag">🔢 {ex.sets} سيت</span>
+                <span className="extag">↩️ {ex.reps}</span>
+                <span className="extag">⏱️ {ex.rest}</span>
+                <span className={"p "+(ex.lvl==="مبتدئ"?"pgreen":ex.lvl==="متوسط"?"pg":"pred")}>{ex.lvl}</span>
+              </div>
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="progress" && <>
+          <div className="ptitle">تقدمي</div>
+          <div className="psub">تابع رحلتك</div>
+          {me.progress&&me.progress.length>0 ? (
+            <div className="box">
+              <div className="boxt" style={{marginBottom:10}}>📈 تغيّر الوزن</div>
+              <div className="chart">{me.progress.map((p,i)=>(
+                <div className="bwrap" key={i}>
+                  <div className="bval">{p.w}</div>
+                  <div className="bar" style={{height:`${(p.w/maxW)*65}px`}}/>
+                  <div className="blbl">{p.m}</div>
+                </div>
+              ))}</div>
+            </div>
+          ) : <div className="box"><p style={{color:"var(--dim)",textAlign:"center",padding:12}}>لم يتم تسجيل قياسات بعد</p></div>}
+          <div className="box">
+            <div className="boxt" style={{marginBottom:12}}>📊 قياساتك الحالية</div>
+            {[["الوزن",me.weight,"كجم","var(--gold)",.8],["الطول",me.height,"سم","var(--blue)",.9],["الدهون",me.fat,"%",fl.c,.35]].map(([l,v,u,c,r])=>(
+              <div className="pbwrap" key={l}>
+                <div className="pblabel"><span>{l}</span><span style={{color:c}}>{v} {u}</span></div>
+                <div className="pbbg"><div className="pbfill" style={{width:`${r*100}%`,background:`linear-gradient(90deg,${c}44,${c})`}}/></div>
+              </div>
+            ))}
+          </div>
+        </>}
+
+        {tab==="calculator" && <>
+          <div className="ptitle">سعراتي اليومية</div>
+          <div className="psub">محسوبة بناءً على بياناتك</div>
+          <div className="cres">
+            <h3>توصية مدربك — {me.goal==="bulk"?"تضخيم":me.goal==="cut"?"تنشيف":"حفاظ"}</h3>
+            <div className="cnums">
+              <div className="cnum"><div className="n">{cs}</div><div className="l">سعرة/يوم</div></div>
+              <div className="cnum"><div className="n" style={{color:"#4ade80"}}>{Math.round(me.weight*2.2)}g</div><div className="l">بروتين</div></div>
+              <div className="cnum"><div className="n" style={{color:"#facc15"}}>{Math.round((cs*.45)/4)}g</div><div className="l">كربوهيدرات</div></div>
+              <div className="cnum"><div className="n" style={{color:"#fb923c"}}>{Math.round((cs*.25)/9)}g</div><div className="l">دهون</div></div>
+            </div>
+          </div>
+          <div className="box" style={{marginTop:16}}>
+            <div className="boxt" style={{marginBottom:10}}>💡 نصائح التغذية</div>
+            {(me.goal==="bulk"?["وزّع وجباتك على 5-6 وجبات يومياً","تناول الكربوهيدرات قبل وبعد التمرين","لا تنسَ البروتين في كل وجبة","اشرب 3-4 لترات ماء يومياً"]:["قلل الكربوهيدرات في المساء","ركز على البروتين للحفاظ على العضل","تناول الخضروات بكميات كبيرة","تجنب السكريات المكررة"]).map((t,i)=>(
+              <div className="tip" key={i} style={{marginBottom:8}}>💡 {t}</div>
+            ))}
+          </div>
+        </>}
+
+        {tab==="challenges" && <>
+          <div className="ptitle">التحديات الأسبوعية</div>
+          <div className="psub">اكمل التحديات واكسب النقاط</div>
+          <div className="chl">{CHALLENGES.map(ch=>(
+            <div className="chi" key={ch.id}>
+              <div className="chico">{ch.ico}</div>
+              <div className="chinfo"><div className="chtitle">{ch.title}</div><div className="chdesc">{ch.desc}</div></div>
+              <div className="chpts">+{ch.pts} ⭐</div>
+            </div>
+          ))}</div>
+        </>}
+
+        {tab==="tips" && <>
+          <div className="ptitle">نصائح الاستشفاء</div>
+          <div className="psub">من مدربك إليك</div>
+          <div style={{display:"flex",gap:10,marginBottom:16}}>
+            <div className={"tab"+(tipTab==="recovery"?" on":"")} onClick={()=>setTipTab("recovery")} style={{cursor:"pointer"}}>🛌 الاستشفاء</div>
+            <div className={"tab"+(tipTab==="injury"?" on":"")} onClick={()=>setTipTab("injury")} style={{cursor:"pointer"}}>🩹 الإصابات</div>
+          </div>
+          <div className="tipgrid">{TIPS[tipTab].map((t,i)=>(
+            <div className="tip" key={i}>
+              <span style={{color:"var(--gold)",marginLeft:7}}>{tipTab==="recovery"?["💤","💧","🥩","🚶","🔄","🧊"][i]:["⛔","🦵","🔙","🙌","🧊","⏳"][i]}</span>{t}
+            </div>
+          ))}</div>
+        </>}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ──────────────────────────────────────────────────────
+export default function App() {
+  const [user, setUser] = useState(null);
+  useProtection();
+  return (
+    <>
+      <style>{CSS}</style>
+      {!user
+        ? <Login onLogin={setUser} />
+        : user.role==="trainer"
+          ? <TrainerApp onLogout={()=>setUser(null)} />
+          : <MemberApp user={user} onLogout={()=>setUser(null)} />
+      }
+    </>
+  );
+}
