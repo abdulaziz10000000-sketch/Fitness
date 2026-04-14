@@ -1,9 +1,0 @@
-{
-  "short_name":"COACH PRO",
-  "name":"COACH PRO - منصة التدريب",
-  "start_url":".",
-  "display":"standalone",
-  "theme_color":"#050505",
-  "background_color":"#050505",
-  "orientation":"portrait"
-}
