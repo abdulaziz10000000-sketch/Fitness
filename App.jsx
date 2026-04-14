@@ -1,0 +1,2144 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { loadData, saveData, saveDataRetry } from "./firebase";
+
+const E={
+  bg:"#050505",d1:"#080808",d2:"#0f0f0f",d3:"#141414",d4:"#1a1a1a",
+  neon:"#00ff66",neonDim:"#00aa44",neonGlow:"rgba(0,255,102,0.2)",
+  cyan:"#00d4ff",gold:"#ffcc00",red:"#ff3366",purple:"#a855f7",
+  text:"#f0f0f0",dim:"#444",dim2:"#666",border:"#1e1e1e",
+};
+
+const CSS=`
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Orbitron:wght@700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{height:-webkit-fill-available;}
+body{background:#050505;color:#f0f0f0;font-family:'Tajawal',sans-serif;direction:rtl;user-select:none;-webkit-user-select:none;overflow-x:hidden;min-height:100vh;min-height:-webkit-fill-available;-webkit-text-size-adjust:100%;}
+input,select,textarea{font-family:'Tajawal',sans-serif;font-size:16px !important;-webkit-appearance:none;appearance:none;}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+button{cursor:pointer;touch-action:manipulation;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:#0a0a0a;}
+::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
+@keyframes su{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.7}50%{opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes glow{0%,100%{box-shadow:0 0 6px rgba(0,255,102,0.3)}50%{box-shadow:0 0 18px rgba(0,255,102,0.7)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.a1{animation:su .35s ease both}.a2{animation:su .35s .07s ease both}.a3{animation:su .35s .14s ease both}
+.a4{animation:su .35s .21s ease both}.a5{animation:su .35s .28s ease both}
+.pulse{animation:pulse 2s infinite}.blink{animation:blink 1s infinite}.spin{animation:spin 1s linear infinite}
+`;
+
+// ─── HELPERS ──────────────────────────────────────────────────
+const calcCals=(wt,ht,goal)=>{const t=(10*(wt||75)+6.25*(ht||175)-5*25+5)*1.55;return Math.round(goal==="bulk"?t+400:goal==="cut"?t-500:t);};
+const fatCat=f=>f<6?{t:"نخبة",c:"#00d4ff"}:f<14?{t:"رياضي",c:"#00ff66"}:f<18?{t:"جيد",c:"#ffcc00"}:f<25?{t:"مقبول",c:"#fb923c"}:{t:"يحتاج تحسين",c:"#ff3366"};
+const fmt=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+const todayStr=()=>new Date().toISOString().slice(0,10);
+const weekKey=()=>{const d=new Date();const diff=d.getDate()-d.getDay()+(d.getDay()===0?-6:1);return new Date(new Date(d).setDate(diff)).toISOString().slice(0,10);};
+const timeStr=()=>new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});
+const beep=(f=660,d=.08)=>{try{const c=new(window.AudioContext||window.webkitAudioContext)();const o=c.createOscillator();const g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=f;g.gain.value=.25;o.start();o.stop(c.currentTime+d);setTimeout(()=>c.close(),500);}catch(e){}};
+const doneBeep=()=>{beep(440,.08);setTimeout(()=>beep(554,.08),150);setTimeout(()=>beep(660,.2),300);};
+
+// ─── STATIC DATA ──────────────────────────────────────────────
+const TRAINER_CREDS={id:"trainer",user:"coach_admin",pass:"Admin@2025",name:"المدرب"};
+const INIT_MEMBERS=[
+  {id:"ahmed", name:"أحمد الشمري", pass:"pass123",plan:"program3weeks",goal:"bulk",wt:85,ht:178,fat:22,pts:340,date:"2025-01-15",prog:[{m:"يناير",w:85},{m:"فبراير",w:83},{m:"مارس",w:81}],subEnd:"2025-12-31",subStatus:"active"},
+  {id:"khaled",name:"خالد العتيبي",pass:"pass123",plan:"program3weeks",goal:"cut", wt:95,ht:175,fat:28,pts:210,date:"2025-02-01",prog:[{m:"يناير",w:95},{m:"فبراير",w:93},{m:"مارس",w:91}],subEnd:"2025-08-01",subStatus:"active"},
+  {id:"fahad", name:"فهد القحطاني",pass:"pass123",plan:"program3weeks",goal:"bulk",wt:72,ht:180,fat:15,pts:480,date:"2025-01-20",prog:[{m:"يناير",w:72},{m:"فبراير",w:74},{m:"مارس",w:76}],subEnd:"2025-06-20",subStatus:"active"},
+];
+
+// ─── PROGRAM ──────────────────────────────────────────────────
+const PLANS={
+  "program3weeks":{label:"برنامج 3 أسابيع",weeks:[
+    {label:"الأسبوع الأول",days:[
+      {d:"اليوم الأول",  l:"صدر — Push Day",         mu:["push"]},
+      {d:"اليوم الثاني", l:"أرجل — Legs Day",         mu:["legs_prog"]},
+      {d:"اليوم الثالث", l:"كارديو + بطن + جاكوزي",  mu:["cardio_core"]},
+      {d:"اليوم الرابع", l:"ظهر + باي — Pull Day",    mu:["pull"]},
+      {d:"اليوم الخامس", l:"صدر — Push Day",          mu:["push"]},
+      {d:"اليوم السادس", l:"أرجل — Legs Day",         mu:["legs_prog"]},
+      {d:"اليوم السابع", l:"راحة",                    mu:[]},
+    ]},
+    {label:"الأسبوع الثاني",days:[
+      {d:"اليوم الأول",  l:"ظهر + باي — Pull Day",    mu:["pull"]},
+      {d:"اليوم الثاني", l:"صدر — Push Day",          mu:["push"]},
+      {d:"اليوم الثالث", l:"كارديو + بطن + جاكوزي",  mu:["cardio_core"]},
+      {d:"اليوم الرابع", l:"أرجل — Legs Day",         mu:["legs_prog"]},
+      {d:"اليوم الخامس", l:"ظهر + باي — Pull Day",    mu:["pull"]},
+      {d:"اليوم السادس", l:"صدر — Push Day",          mu:["push"]},
+      {d:"اليوم السابع", l:"راحة",                    mu:[]},
+    ]},
+    {label:"الأسبوع الثالث",days:[
+      {d:"اليوم الأول",  l:"أرجل — Legs Day",         mu:["legs_prog"]},
+      {d:"اليوم الثاني", l:"ظهر + باي — Pull Day",    mu:["pull"]},
+      {d:"اليوم الثالث", l:"كارديو + بطن + جاكوزي",  mu:["cardio_core"]},
+      {d:"اليوم الرابع", l:"صدر — Push Day",          mu:["push"]},
+      {d:"اليوم الخامس", l:"أرجل — Legs Day",         mu:["legs_prog"]},
+      {d:"اليوم السادس", l:"ظهر + باي — Pull Day",    mu:["pull"]},
+      {d:"اليوم السابع", l:"راحة",                    mu:[]},
+    ]},
+  ]},
+};
+
+const EX={
+  push:[
+    {id:"p1",n:"بنش برس مستوي — Flat Bench Press",       s:3,r:"8",     rest:90, lv:"متوسط",i:"🏋️",video:"",note:""},
+    {id:"p2",n:"بنش برس علوي — Incline Bench Press",      s:3,r:"8",     rest:90, lv:"متوسط",i:"📈",video:"",note:""},
+    {id:"p3",n:"كتف أمامي — Front Raise / Shoulder Press",s:3,r:"8-12",  rest:75, lv:"مبتدئ",i:"🙌",video:"",note:""},
+    {id:"p4",n:"صدر تفتيح — Chest Flyes",                 s:3,r:"12-15", rest:60, lv:"مبتدئ",i:"🦋",video:"",note:""},
+    {id:"p5",n:"تراي سبس كيبل — Cable Triceps Pushdown",  s:3,r:"12",    rest:60, lv:"مبتدئ",i:"💪",video:"",note:""},
+    {id:"p6",n:"كتف جانبي — Lateral Raise",               s:3,r:"8-7-8", rest:60, lv:"مبتدئ",i:"↔️",video:"",note:"تكنيك 8-7-8 · 2 إلى 3 جلسات حسب القدرة"},
+  ],
+  pull:[
+    {id:"b1",n:"سحب علوي واسع — Wide Grip Lat Pulldown",  s:3,r:"8-12",  rest:90, lv:"متوسط",i:"⬇️",video:"",note:""},
+    {id:"b2",n:"سحب علوي ضيق — Close Grip Lat Pulldown",  s:3,r:"12",    rest:90, lv:"مبتدئ",i:"↙️",video:"",note:""},
+    {id:"b3",n:"سحب أفقي واسع — Wide Grip Seated Row",    s:3,r:"8-12",  rest:90, lv:"متوسط",i:"🔙",video:"",note:""},
+    {id:"b4",n:"سحب أفقي ضيق — Close Grip Seated Row",    s:3,r:"12",    rest:75, lv:"مبتدئ",i:"↩️",video:"",note:""},
+    {id:"b5",n:"كتف أمامي + باي كيبل — سوبر سيت",        s:3,r:"12",    rest:75, lv:"متوسط",i:"🔗",video:"",note:"Cable Front Raise & Bicep Cable Curl · سوبر سيت"},
+    {id:"b6",n:"كتف جانبي — Lateral Raise",               s:3,r:"8-7-8", rest:60, lv:"مبتدئ",i:"↔️",video:"",note:"تكنيك 8-7-8"},
+    {id:"b7",n:"باي كيرل — Bicep Curl",                   s:3,r:"8-7-8", rest:60, lv:"مبتدئ",i:"💪",video:"",note:"تكنيك 8-7-8"},
+  ],
+  legs_prog:[
+    {id:"l1",n:"سكوات — Squat",                           s:3,r:"8",     rest:120,lv:"متقدم",i:"🦵",video:"",note:""},
+    {id:"l2",n:"رفرفة أمامي — Leg Extension",             s:3,r:"8-12",  rest:75, lv:"مبتدئ",i:"⬆️",video:"",note:""},
+    {id:"l3",n:"رفرفة خلفي — Leg Curl",                   s:3,r:"8-12",  rest:75, lv:"مبتدئ",i:"🔁",video:"",note:""},
+    {id:"l4",n:"دفع أرجل — Leg Press",                    s:3,r:"8",     rest:90, lv:"متوسط",i:"🦶",video:"",note:""},
+    {id:"l5",n:"بطات — Calf Raises",                      s:3,r:"15",    rest:60, lv:"مبتدئ",i:"👟",video:"",note:""},
+    {id:"l6",n:"قلوتس + عضلة ضامة — سوبر سيت",           s:3,r:"12-15", rest:60, lv:"مبتدئ",i:"🔗",video:"",note:"Glutes & Hip Adductors · سوبر سيت"},
+  ],
+  cardio_core:[
+    {id:"cc1",n:"كارديو — تريدميل / دراجة",               s:1,r:"20-30 دق",rest:0, lv:"مبتدئ",i:"🏃",video:"",note:""},
+    {id:"cc2",n:"بلانك — Plank",                          s:3,r:"30-60 ث", rest:30,lv:"مبتدئ",i:"🧘",video:"",note:""},
+    {id:"cc3",n:"كرانش — Crunches",                       s:3,r:"15-20",   rest:30,lv:"مبتدئ",i:"🔥",video:"",note:""},
+    {id:"cc4",n:"رفع أرجل — Leg Raises",                  s:3,r:"12-15",   rest:30,lv:"مبتدئ",i:"⬆️",video:"",note:""},
+    {id:"cc5",n:"جاكوزي — استشفاء",                       s:1,r:"10-15 دق",rest:0, lv:"مبتدئ",i:"🛁",video:"",note:"استرخاء واستشفاء بعد التمرين"},
+  ],
+};
+
+const CHALLENGES=[
+  {id:1,title:"تحدي 100 ضغط",pts:50,i:"🏆"},
+  {id:2,title:"تحدي الحضور الكامل",pts:75,i:"🌟"},
+  {id:3,title:"تحدي الكارديو",pts:40,i:"🔥"},
+  {id:4,title:"تحدي التسجيل اليومي",pts:30,i:"📊"},
+];
+const TIPS={
+  recovery:["💤 نم 7-9 ساعات يومياً","💧 اشرب 3-4 لترات ماء","🥩 بروتين بعد التمرين فوراً","🚶 راحة فعّالة أسبوعياً","🔄 فوم رولر للآلام","🧊 الحمام البارد يسرّع الاستشفاء"],
+  injury:["⛔ آلام حادة = توقف فوري","🦵 آلام الركبة: راجع مدربك","🔙 آلام الظهر: تجنب الديدليفت","🙌 آلام الكتف: الكابل بديل","🧊 RICE: راحة ثلج ضغط رفع","⏳ لا تعود قبل الشفاء"],
+};
+
+const FOOD_CATS={
+  proteins:{label:"🥩 بروتين",c:E.red,items:[{n:"صدر دجاج مشوي",cal:165,p:31,carb:0,f:3.6},{n:"بيض كامل",cal:155,p:13,carb:1.1,f:11},{n:"تونة بالماء",cal:116,p:26,carb:0,f:1},{n:"لحم بقري 90%",cal:215,p:26,carb:0,f:12},{n:"سمك السلمون",cal:208,p:20,carb:0,f:13},{n:"صدر ديك رومي",cal:135,p:30,carb:0,f:1},{n:"جبن قريش",cal:98,p:11,carb:3.4,f:4.3},{n:"واي بروتين",cal:120,p:25,carb:3,f:1.5}]},
+  carbs:{label:"🍚 كارب",c:E.gold,items:[{n:"أرز أبيض مطبوخ",cal:130,p:2.7,carb:28,f:0.3},{n:"أرز بني مطبوخ",cal:112,p:2.6,carb:24,f:0.9},{n:"شوفان جاف",cal:389,p:17,carb:66,f:7},{n:"بطاطا حلوة",cal:90,p:2,carb:21,f:0.1},{n:"خبز قمح كامل",cal:247,p:13,carb:41,f:4.2},{n:"موز",cal:89,p:1.1,carb:23,f:0.3},{n:"تفاح",cal:52,p:0.3,carb:14,f:0.2},{n:"عدس مطبوخ",cal:116,p:9,carb:20,f:0.4}]},
+  fats:{label:"🥑 دهون",c:E.neon,items:[{n:"أفوكادو",cal:160,p:2,carb:9,f:15},{n:"زيت زيتون",cal:884,p:0,carb:0,f:100},{n:"مكسرات مشكلة",cal:607,p:20,carb:21,f:54},{n:"لوز",cal:579,p:21,carb:22,f:50},{n:"زبدة فول سوداني",cal:588,p:25,carb:20,f:50}]},
+  vegs:{label:"🥗 خضار",c:E.cyan,items:[{n:"بروكلي مطبوخ",cal:35,p:2.4,carb:7,f:0.4},{n:"سبانخ",cal:23,p:2.9,carb:3.6,f:0.4},{n:"خيار",cal:15,p:0.7,carb:3.6,f:0.1},{n:"طماطم",cal:18,p:0.9,carb:3.9,f:0.2},{n:"فلفل أحمر",cal:31,p:1,carb:7,f:0.3},{n:"جزر",cal:41,p:0.9,carb:10,f:0.2}]},
+};
+const MEAL_PLANS={
+  bulk:{label:"تضخيم 🔥",c:E.gold,days:[{d:"اليوم الأول",meals:[{t:"الإفطار 7:00",items:["شوفان 100g + موز + بروتين","بيض 3"],cal:680,p:45,carb:80,f:15},{t:"قبل التمرين 11:00",items:["أرز بني 150g","دجاج 150g"],cal:520,p:50,carb:55,f:8},{t:"بعد التمرين",items:["بروتين سكوب + موزة"],cal:200,p:26,carb:28,f:1},{t:"الغداء 14:00",items:["أرز 200g","لحم 150g"],cal:750,p:55,carb:70,f:20},{t:"العشاء 19:00",items:["سلمون 200g","بطاطا حلوة"],cal:580,p:45,carb:50,f:18},{t:"قبل النوم",items:["جبن قريش 200g"],cal:280,p:26,carb:10,f:14}]}]},
+  cut:{label:"تنشيف ❄️",c:E.cyan,days:[{d:"اليوم الأول",meals:[{t:"الإفطار 7:00",items:["بيض 3 + بياض 3","سبانخ"],cal:280,p:30,carb:5,f:14},{t:"وجبة 10:00",items:["جبن قريش 200g"],cal:280,p:34,carb:8,f:8},{t:"الغداء 13:00",items:["دجاج 200g + سلطة"],cal:380,p:48,carb:12,f:14},{t:"بعد التمرين",items:["بروتين سكوب + موزة صغيرة"],cal:185,p:26,carb:22,f:1},{t:"العشاء 19:00",items:["سلمون 200g + خضار"],cal:430,p:42,carb:15,f:20}]}]},
+  maintain:{label:"حفاظ ⚖️",c:E.neon,days:[{d:"اليوم الأول",meals:[{t:"الإفطار 7:00",items:["شوفان 80g + بيض 3"],cal:520,p:32,carb:65,f:12},{t:"الغداء 13:00",items:["أرز بني 150g + دجاج 180g"],cal:620,p:50,carb:52,f:16},{t:"بعد التمرين",items:["بروتين + تمر"],cal:210,p:26,carb:24,f:1},{t:"العشاء 19:00",items:["سمك 200g + معكرونة 100g"],cal:520,p:44,carb:48,f:10}]}]},
+};
+
+// ─── STORAGE ──────────────────────────────────────────────────
+const K={
+  members:"members",msgs:"msgs",att:"att",notifs:"notifs",
+  chals:"chals",weightLogs:"weightLogs",macros:"macros",
+  photos:"photos",subs:"subs",customPlans:"customPlans",videos:"videos",
+};
+const sg = loadData;
+const ss = saveData;
+const ssRetry = saveDataRetry;
+
+// ─── UI ATOMS ─────────────────────────────────────────────────
+const INP={width:"100%",background:"rgba(255,255,255,0.04)",border:`1px solid #1e1e1e`,borderRadius:6,padding:"11px 12px",color:"#f0f0f0",fontFamily:"'Tajawal',sans-serif",fontSize:"16px",outline:"none",boxSizing:"border-box",transition:"border .2s"};
+
+function Toast({msg}){
+  return <div style={{position:"fixed",top:14,left:"50%",transform:`translateX(-50%) translateY(${msg?0:-80}px)`,background:"#0f0f0f",border:`1px solid ${E.neon}`,borderRadius:6,padding:"9px 18px",fontSize:13,color:E.neon,zIndex:9999,transition:"transform .3s",whiteSpace:"nowrap",pointerEvents:"none",boxShadow:`0 0 20px ${E.neonGlow}`}}>{msg}</div>;
+}
+
+function Btn({label,onClick,outline,danger,small,full,color,disabled,style={}}){
+  const [pr,setPr]=useState(false);
+  const c=danger?E.red:color||E.neon;
+  const h=()=>{if(disabled)return;setPr(true);setTimeout(()=>setPr(false),150);onClick?.();};
+  return <button onClick={h} disabled={disabled} style={{padding:small?"6px 12px":"10px 18px",borderRadius:6,background:outline?"transparent":disabled?`${c}66`:c,color:outline?c:"#000",border:outline?`1px solid ${c}`:"none",fontFamily:"'Tajawal',sans-serif",fontSize:small?12:13,fontWeight:700,cursor:disabled?"not-allowed":"pointer",width:full?"100%":"auto",opacity:disabled?.5:1,transform:pr?"scale(.96)":"scale(1)",transition:"transform .1s",...style}}>{label}</button>;
+}
+
+function Card({children,neon,gold,onClick,style={}}){
+  const [h,setH]=useState(false);
+  const bc=neon?`${E.neon}33`:gold?`${E.gold}33`:"#1e1e1e";
+  return <div onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{background:"#0f0f0f",border:`1px solid ${h&&onClick?E.neon:bc}`,borderRadius:8,padding:16,transition:"all .2s",cursor:onClick?"pointer":"default",...style}}>{children}</div>;
+}
+
+function Tag({c,children}){
+  const col=c||E.neon;
+  return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,background:`${col}18`,color:col,border:`1px solid ${col}33`}}>{children}</span>;
+}
+
+function Ring({pct,size=54,stroke=5,color,label,val}){
+  const r=(size-stroke*2)/2;const C=2*Math.PI*r;
+  return(
+    <div style={{textAlign:"center"}}>
+      <div style={{position:"relative",width:size,height:size,margin:"0 auto"}}>
+        <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke}/>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color||E.neon} strokeWidth={stroke}
+            strokeDasharray={C} strokeDashoffset={C*(1-Math.min(1,(pct||0)/100))} strokeLinecap="round"
+            style={{transition:"stroke-dashoffset 1s",filter:`drop-shadow(0 0 3px ${color||E.neon})`}}/>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:color||E.neon,fontFamily:"'Orbitron',monospace"}}>{Math.round(pct||0)}%</div>
+      </div>
+      {val&&<div style={{fontFamily:"'Orbitron',monospace",fontSize:11,fontWeight:700,color:color||E.neon,marginTop:3}}>{val}</div>}
+      {label&&<div style={{fontSize:9,color:E.dim2,marginTop:1}}>{label}</div>}
+    </div>
+  );
+}
+
+function MiniChart({data}){
+  if(!data||!data.length)return null;
+  const max=Math.max(...data.map(d=>d.w));const min=Math.min(...data.map(d=>d.w));const range=max-min||1;
+  return(
+    <div style={{display:"flex",alignItems:"flex-end",gap:5,height:65,marginTop:8}}>
+      {data.map((d,i)=>{
+        const h=Math.max(8,((d.w-min)/range)*52+8);
+        return(
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,height:"100%",justifyContent:"flex-end"}}>
+            <div style={{fontSize:8,color:E.neon,fontFamily:"'Orbitron',monospace"}}>{d.w}</div>
+            <div style={{width:"100%",borderRadius:"3px 3px 0 0",background:`linear-gradient(180deg,${E.neon},${E.neonDim})`,height:`${h}px`,transition:"height .8s"}}/>
+            <div style={{fontSize:7,color:E.dim2}}>{d.m}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Orb({t}){return <div style={{fontFamily:"'Orbitron',monospace",fontSize:10,color:E.neon,letterSpacing:3,marginBottom:12}}>{t}</div>;}
+
+function Header({title,extra,badge}){
+  return(
+    <div style={{position:"sticky",top:0,zIndex:900,background:"rgba(5,5,5,0.95)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:`1px solid #1e1e1e`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:900,color:E.neon,letterSpacing:3,textShadow:`0 0 8px ${E.neon}`}}>COACH PRO</div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {badge&&<span className="pulse" style={{background:`${E.red}22`,border:`1px solid ${E.red}`,borderRadius:20,padding:"2px 8px",fontSize:11,color:E.red,fontWeight:700}}>{badge}</span>}
+        <span style={{fontSize:13,fontWeight:700,color:E.text}}>{title}</span>
+      </div>
+      {extra||<div style={{width:60}}/>}
+    </div>
+  );
+}
+
+function BottomNav({items,tab,setTab,badges={}}){
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#080808",borderTop:`1px solid #1e1e1e`,display:"flex",zIndex:1000,paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+      {items.map(({k,i,l})=>(
+        <button key={k} onClick={()=>setTab(k)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"10px 2px",minHeight:56,background:"transparent",border:"none",cursor:"pointer",color:tab===k?E.neon:E.dim,borderTop:tab===k?`2px solid ${E.neon}`:"2px solid transparent",fontFamily:"'Tajawal',sans-serif",transition:"color .15s",position:"relative"}}>
+          <span style={{fontSize:18,filter:tab===k?`drop-shadow(0 0 4px ${E.neon})`:"none",lineHeight:1}}>{i}</span>
+          <span style={{fontSize:9,fontWeight:tab===k?700:400,marginTop:1}}>{l}</span>
+          {(badges[k]||0)>0&&<span style={{position:"absolute",top:4,right:"8%",background:E.red,borderRadius:"50%",width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{badges[k]>9?"9+":badges[k]}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const PW=({children})=><div style={{padding:"13px 13px 0",paddingBottom:"calc(90px + env(safe-area-inset-bottom,0px))",minHeight:"100vh",background:E.bg}}>{children}</div>;
+
+// ─── REST TIMER ───────────────────────────────────────────────
+function RestTimer(){
+  const [preset,setPreset]=useState(60);
+  const [time,setTime]=useState(60);
+  const [running,setRunning]=useState(false);
+  const [done,setDone]=useState(false);
+  const intervalRef=useRef(null);
+  const pct=Math.max(0,((preset-time)/preset)*100);
+  const R=72;const C=2*Math.PI*R;
+  useEffect(()=>{
+    if(running&&time>0){intervalRef.current=setInterval(()=>{setTime(t=>{if(t<=4&&t>1)beep(440+((4-t)*110),.06);return t-1;});},1000);}
+    else if(time===0&&running){setRunning(false);setDone(true);clearInterval(intervalRef.current);doneBeep();if(navigator.vibrate)navigator.vibrate([200,100,200,100,400]);}
+    return()=>clearInterval(intervalRef.current);
+  },[running,time]);
+  const start=()=>{setDone(false);setRunning(true);beep(660,.06);};
+  const pause=()=>{setRunning(false);clearInterval(intervalRef.current);};
+  const reset=()=>{setRunning(false);setDone(false);setTime(preset);clearInterval(intervalRef.current);};
+  const pick=v=>{setPreset(v);setTime(v);setRunning(false);setDone(false);clearInterval(intervalRef.current);};
+  const col=done?E.neon:running?(time<=10?E.red:E.neon):E.dim2;
+  return(
+    <Card style={{marginBottom:14,textAlign:"center"}}>
+      <Orb t="⏱ REST TIMER"/>
+      <div style={{position:"relative",width:180,height:180,margin:"0 auto 14px"}}>
+        <svg width="180" height="180" style={{position:"absolute",top:0,left:0,transform:"rotate(-90deg)"}}>
+          <circle cx="90" cy="90" r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="8"/>
+          <circle cx="90" cy="90" r={R} fill="none" stroke={col} strokeWidth="8"
+            strokeDasharray={C} strokeDashoffset={C*(1-pct/100)} strokeLinecap="round"
+            style={{transition:"stroke-dashoffset .8s,stroke .3s",filter:`drop-shadow(0 0 6px ${col})`}}/>
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:40,fontWeight:900,color:col,lineHeight:1,textShadow:`0 0 12px ${col}`}}>{fmt(time)}</div>
+          <div style={{fontSize:10,color:E.dim2,marginTop:5,letterSpacing:2}}>{done?"✅ DONE":running?"RESTING":"READY"}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:12}}>
+        {[30,45,60,90,120,180].map(v=>(
+          <button key={v} onClick={()=>pick(v)} style={{padding:"5px 10px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Orbitron',monospace",background:preset===v?E.neon:"transparent",color:preset===v?"#000":E.dim2,border:`1px solid ${preset===v?E.neon:"#1e1e1e"}`,fontWeight:700}}>{v<60?v+"s":v/60+"m"}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:9,justifyContent:"center"}}>
+        {!running?<Btn label="▶ START" onClick={start}/>:<Btn label="⏸ PAUSE" onClick={pause} outline/>}
+        <Btn label="↺" onClick={reset} outline color={E.dim2}/>
+      </div>
+    </Card>
+  );
+}
+
+// ─── WATER TRACKER ───────────────────────────────────────────
+function WaterTracker({wt}){
+  const target=Math.round((wt||70)*0.033*10)/10;
+  const [drank,setDrank]=useState(0);
+  const [custom,setCustom]=useState("");
+  const pct=Math.min((drank/(target*1000))*100,100);
+  const add=ml=>{setDrank(p=>Math.min(p+ml,target*1000+500));beep(660,.05);};
+  return(
+    <Card style={{marginBottom:14}}>
+      <Orb t="💧 WATER TRACKER"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:11}}>
+        {[[(drank/1000).toFixed(2)+"L","شربت",E.cyan],[target+"L","الهدف",E.neon],[Math.max(0,(target*1000-drank)/1000).toFixed(2)+"L","متبقي",pct>=100?E.neon:E.red]].map(([v,l,c])=>(
+          <div key={l} style={{background:"#141414",borderRadius:6,padding:"9px 8px",textAlign:"center"}}>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:700,color:c}}>{v}</div>
+            <div style={{fontSize:10,color:E.dim2,marginTop:2}}>{l}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{height:10,borderRadius:3,background:"rgba(255,255,255,0.04)",overflow:"hidden",marginBottom:8}}>
+        <div style={{height:"100%",borderRadius:3,width:`${pct}%`,background:`linear-gradient(90deg,#0088ff,${E.cyan})`,transition:"width .5s"}}/>
+      </div>
+      <div style={{fontSize:10,color:pct>=100?E.neon:E.dim2,textAlign:"center",marginBottom:10}}>{pct>=100?"✅ GOAL!":pct>=50?"💪 HALFWAY!":"💧 KEEP GOING"}</div>
+      <div style={{display:"flex",gap:6,marginBottom:8}}>
+        {[[150,"150ml"],[250,"250ml"],[500,"500ml"],[750,"750ml"]].map(([ml,l])=>(
+          <button key={ml} onClick={()=>add(ml)} style={{flex:1,padding:"7px 3px",borderRadius:6,background:`${E.cyan}10`,border:`1px solid ${E.cyan}28`,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",fontSize:10,color:E.cyan}}>{l}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:8}}>
+        <input type="number" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="كمية مخصصة (ml)" style={{...INP,flex:1}}/>
+        <Btn label="+" onClick={()=>{if(custom){add(+custom);setCustom("");}}}/>
+      </div>
+      <Btn label="🔄 Reset" onClick={()=>setDrank(0)} outline danger full/>
+    </Card>
+  );
+}
+
+// ─── FAT CALCULATOR ──────────────────────────────────────────
+function FatCalc(){
+  const [method,setMethod]=useState("navy");
+  const [gender,setGender]=useState("male");
+  const [inp,setInp]=useState({wt:"",ht:"",neck:"",waist:"",hip:"",age:"",chest:"",abdomen:"",thigh:"",tricep:"",sub:""});
+  const [result,setResult]=useState(null);
+  const s=(k,v)=>setInp(p=>({...p,[k]:v}));
+  const calc=()=>{
+    let fat=null;
+    if(method==="navy"){const{ht,neck,waist,hip}=inp;if(!ht||!neck||!waist||(gender==="female"&&!hip))return;const h=+ht,n=+neck,w=+waist,hp=+hip;fat=gender==="male"?495/(1.0324-0.19077*Math.log10(w-n)+0.15456*Math.log10(h))-450:495/(1.29579-0.35004*Math.log10(w+hp-n)+0.22100*Math.log10(h))-450;}
+    else if(method==="bmi"){const{wt,ht,age}=inp;if(!wt||!ht||!age)return;const bmi=(+wt)/(((+ht)/100)**2);fat=gender==="male"?(1.20*bmi)+(0.23*(+age))-16.2:(1.20*bmi)+(0.23*(+age))-5.4;}
+    else{const{age,chest,abdomen,thigh,tricep,sub}=inp;if(!age)return;let sum=0,density;if(gender==="male"){if(!chest||!abdomen||!thigh)return;sum=+chest+(+abdomen)+(+thigh);density=1.10938-(0.0008267*sum)+(0.0000016*sum*sum)-(0.0002574*(+age));}else{if(!tricep||!sub||!thigh)return;sum=+tricep+(+sub)+(+thigh);density=1.0994921-(0.0009929*sum)+(0.0000023*sum*sum)-(0.0001392*(+age));}fat=(495/density)-450;}
+    if(fat!==null){setResult(Math.max(0,Math.round(fat*10)/10));beep(440,.05);}
+  };
+  const fc=result!==null?fatCat(result):null;
+  const leanM=result!==null&&inp.wt?Math.round(+inp.wt*(1-result/100)*10)/10:null;
+  const fatM=result!==null&&inp.wt?Math.round(+inp.wt*(result/100)*10)/10:null;
+  return(
+    <Card style={{marginBottom:14}}>
+      <Orb t="📏 FAT CALCULATOR"/>
+      <div style={{display:"flex",gap:7,marginBottom:11}}>
+        {[["male","ذكر"],["female","أنثى"]].map(([k,l])=>(
+          <button key={k} onClick={()=>{setGender(k);setResult(null);}} style={{flex:1,padding:"8px",borderRadius:5,fontSize:13,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:gender===k?E.neon:"transparent",color:gender===k?"#000":E.dim2,border:`1px solid ${gender===k?E.neon:"#1e1e1e"}`,fontWeight:700}}>{l}</button>
+        ))}
+      </div>
+      <div style={{marginBottom:11}}>
+        {[{k:"navy",l:"البحرية الأمريكية",d:"دقيقة"},{k:"bmi",l:"BMI",d:"سريعة"},{k:"skinfold",l:"ثنيات الجلد",d:"الأدق"}].map(m=>(
+          <div key={m.k} onClick={()=>{setMethod(m.k);setResult(null);}} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:6,marginBottom:5,background:method===m.k?`${E.neon}0a`:"#141414",border:`1px solid ${method===m.k?E.neon:"#1e1e1e"}`,cursor:"pointer"}}>
+            <div style={{width:12,height:12,borderRadius:"50%",border:`2px solid ${method===m.k?E.neon:E.dim}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{method===m.k&&<div style={{width:5,height:5,borderRadius:"50%",background:E.neon}}/>}</div>
+            <div><div style={{fontSize:12,fontWeight:method===m.k?700:400,color:method===m.k?E.neon:E.text}}>{m.l}</div><div style={{fontSize:10,color:E.dim2}}>{m.d}</div></div>
+          </div>
+        ))}
+      </div>
+      {method==="navy"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          {[["الطول (سم)","ht"],["الرقبة (سم)","neck"],["الخصر (سم)","waist"],gender==="female"?["الوركين (سم)","hip"]:null].filter(Boolean).map(([l,k])=>(
+            <div key={k}><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>{l}</div><input type="number" value={inp[k]} onChange={e=>s(k,e.target.value)} placeholder="0" style={INP}/></div>
+          ))}
+        </div>
+      )}
+      {method==="bmi"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          {[["الوزن (كجم)","wt"],["الطول (سم)","ht"],["العمر","age"]].map(([l,k])=>(
+            <div key={k}><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>{l}</div><input type="number" value={inp[k]} onChange={e=>s(k,e.target.value)} placeholder="0" style={INP}/></div>
+          ))}
+        </div>
+      )}
+      {method==="skinfold"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>العمر</div><input type="number" value={inp.age} onChange={e=>s("age",e.target.value)} placeholder="25" style={INP}/></div>
+          <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>الوزن (كجم)</div><input type="number" value={inp.wt} onChange={e=>s("wt",e.target.value)} placeholder="80" style={INP}/></div>
+          {(gender==="male"?[["الصدر (مم)","chest"],["البطن (مم)","abdomen"],["الفخذ (مم)","thigh"]]:[["الترايسبس (مم)","tricep"],["تحت الكتف (مم)","sub"],["الفخذ (مم)","thigh"]]).map(([l,k])=>(
+            <div key={k}><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>{l}</div><input type="number" value={inp[k]} onChange={e=>s(k,e.target.value)} placeholder="0" style={INP}/></div>
+          ))}
+        </div>
+      )}
+      <Btn label="⚡ احسب نسبة الدهون" onClick={calc} full/>
+      {result!==null&&fc&&(
+        <div style={{marginTop:12,background:"#141414",border:`1px solid ${fc.c}55`,borderRadius:8,padding:14}}>
+          <div style={{textAlign:"center",marginBottom:10}}>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:44,fontWeight:900,color:fc.c,textShadow:`0 0 15px ${fc.c}`}}>{result}%</div>
+            <div style={{fontSize:13,fontWeight:700,color:fc.c,marginTop:3}}>{fc.t}</div>
+          </div>
+          {leanM&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{background:"#0f0f0f",borderRadius:6,padding:10,textAlign:"center",border:`1px solid ${E.neon}33`}}>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:15,fontWeight:700,color:E.neon}}>{leanM} kg</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1}}>💪 عضل</div>
+              </div>
+              <div style={{background:"#0f0f0f",borderRadius:6,padding:10,textAlign:"center",border:`1px solid ${E.red}33`}}>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:15,fontWeight:700,color:E.red}}>{fatM} kg</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1}}>دهون</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── CALORIE CALCULATOR ──────────────────────────────────────
+function CalcTool(){
+  const [cd,setCd]=useState({wt:"",ht:"",goal:"bulk"});
+  const [res,setRes]=useState(null);
+  return(
+    <Card style={{marginBottom:14}}>
+      <Orb t="🔢 CALORIE CALC"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>الوزن (كجم)</div><input type="number" value={cd.wt} onChange={e=>setCd(p=>({...p,wt:e.target.value}))} placeholder="80" style={INP}/></div>
+        <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>الطول (سم)</div><input type="number" value={cd.ht} onChange={e=>setCd(p=>({...p,ht:e.target.value}))} placeholder="175" style={INP}/></div>
+      </div>
+      <div style={{marginBottom:9}}>
+        <div style={{fontSize:10,color:E.dim2,marginBottom:4}}>الهدف</div>
+        <select value={cd.goal} onChange={e=>setCd(p=>({...p,goal:e.target.value}))} style={INP}>
+          <option value="bulk">تضخيم 🔥</option>
+          <option value="cut">تنشيف ❄️</option>
+          <option value="maintain">حفاظ ⚖️</option>
+        </select>
+      </div>
+      <Btn label="⚡ احسب السعرات" onClick={()=>{
+        if(!cd.wt||!cd.ht)return;
+        const cal=calcCals(+cd.wt,+cd.ht,cd.goal);
+        setRes({cal,p:Math.round(+cd.wt*2.2),carb:Math.round((cal*.45)/4),fat:Math.round((cal*.25)/9)});
+      }} full/>
+      {res&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:10}}>
+          {[[res.cal,"CAL",E.gold],[res.p+"g","PRO",E.neon],[res.carb+"g","CARB",E.gold],[res.fat+"g","FAT","#fb923c"]].map(([v,l,col])=>(
+            <div key={l} style={{background:"#141414",border:`1px solid ${col}33`,borderRadius:6,padding:8,textAlign:"center"}}>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:12,fontWeight:700,color:col}}>{v}</div>
+              <div style={{fontSize:9,color:E.dim2,marginTop:1}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── FOOD DATABASE ───────────────────────────────────────────
+function FoodDB(){
+  const [cat,setCat]=useState("proteins");
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [amt,setAmt]=useState("100");
+  const cur=FOOD_CATS[cat];
+  const filtered=cur.items.filter(f=>f.n.includes(search));
+  const r=amt?(+amt/100):1;
+  return(
+    <>
+      <Card style={{marginBottom:11}}>
+        <Orb t="🍎 FOOD DATABASE"/>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+          {Object.entries(FOOD_CATS).map(([k,v])=>(
+            <button key={k} onClick={()=>{setCat(k);setSearch("");setSel(null);}} style={{padding:"5px 11px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:cat===k?v.c:"transparent",color:cat===k?"#000":E.dim2,border:`1px solid ${cat===k?v.c:"#1e1e1e"}`,fontWeight:700}}>{v.label}</button>
+          ))}
+        </div>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ابحث..." style={{...INP,marginBottom:9}}/>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",gap:4,padding:"6px 8px",background:"#141414",borderRadius:5,marginBottom:6}}>
+          {["الطعام","cal","pro","carb","fat"].map(h=><div key={h} style={{fontSize:9,color:E.dim2,textAlign:"center",fontWeight:700,fontFamily:"'Orbitron',monospace"}}>{h}</div>)}
+        </div>
+        {filtered.map((f,i)=>(
+          <div key={i} onClick={()=>setSel(f)} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",gap:4,padding:"7px 8px",borderRadius:6,marginBottom:4,background:sel===f?`${cur.c}10`:"#141414",border:`1px solid ${sel===f?cur.c:"#1e1e1e"}`,cursor:"pointer"}}>
+            <div style={{fontSize:12,fontWeight:600,color:sel===f?cur.c:E.text}}>{f.n}</div>
+            <div style={{fontSize:11,fontWeight:700,color:E.gold,textAlign:"center",fontFamily:"'Orbitron',monospace"}}>{f.cal}</div>
+            <div style={{fontSize:11,color:E.neon,textAlign:"center",fontFamily:"'Orbitron',monospace"}}>{f.p}g</div>
+            <div style={{fontSize:11,color:E.gold,textAlign:"center",fontFamily:"'Orbitron',monospace"}}>{f.carb}g</div>
+            <div style={{fontSize:11,color:"#fb923c",textAlign:"center",fontFamily:"'Orbitron',monospace"}}>{f.f}g</div>
+          </div>
+        ))}
+      </Card>
+      {sel&&(
+        <Card neon style={{marginBottom:11}}>
+          <div style={{fontSize:12,color:E.dim2,marginBottom:9}}>{sel.n}</div>
+          <input type="number" value={amt} onChange={e=>setAmt(e.target.value)} style={{...INP,marginBottom:8}}/>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:11}}>
+            {[50,100,150,200,250].map(v=>(
+              <button key={v} onClick={()=>setAmt(String(v))} style={{padding:"4px 10px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Orbitron',monospace",background:+amt===v?cur.c:"transparent",color:+amt===v?"#000":E.dim2,border:`1px solid ${+amt===v?cur.c:"#1e1e1e"}`,fontWeight:700}}>{v}g</button>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+            {[[Math.round(sel.cal*r),"CAL",E.gold],[Math.round(sel.p*r*10)/10+"g","PRO",E.neon],[Math.round(sel.carb*r*10)/10+"g","CARB",E.gold],[Math.round(sel.f*r*10)/10+"g","FAT","#fb923c"]].map(([v,l,c])=>(
+              <div key={l} style={{background:"#141414",border:`1px solid ${c}33`,borderRadius:6,padding:9,textAlign:"center"}}>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:700,color:c}}>{v}</div>
+                <div style={{fontSize:9,color:E.dim2,marginTop:2}}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ─── MACRO TRACKER ───────────────────────────────────────────
+function MacroTracker({memberId,targetCals,targetPro,targetCarb,targetFat}){
+  const [logs,setLogs]=useState([]);
+  const [selCat,setSelCat]=useState("proteins");
+  const [selFood,setSelFood]=useState(null);
+  const [amount,setAmount]=useState("100");
+  const [search,setSearch]=useState("");
+  const [viewDay,setViewDay]=useState(todayStr());
+  const [customFood,setCustomFood]=useState({show:false,n:"",cal:"",p:"",carb:"",f:""});
+  const isToday=viewDay===todayStr();
+  const DAYS_AR=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+
+  const load=useCallback(async()=>{
+    const data=await sg(K.macros)||{};
+    setLogs(data[memberId+viewDay]||[]);
+  },[memberId,viewDay]);
+
+  useEffect(()=>{load();const t=setInterval(load,6000);return()=>clearInterval(t);},[load]);
+
+  const addLog=async(food,amt)=>{
+    const r=(+(amt||amount))/100;
+    const entry={id:Date.now(),food:food.n,amount:+(amt||amount),cal:Math.round(food.cal*r),p:Math.round(food.p*r*10)/10,carb:Math.round(food.carb*r*10)/10,f:Math.round(food.f*r*10)/10,time:timeStr()};
+    const all=await sg(K.macros)||{};
+    const key=memberId+viewDay;
+    all[key]=[...(all[key]||[]),entry];
+    await ssRetry(K.macros,all);
+    setLogs(all[key]);
+    setSelFood(null);setAmount("100");setSearch("");beep(880,.06);
+  };
+
+  const addCustom=async()=>{
+    const{n,cal,p,carb,f}=customFood;
+    if(!n||!cal)return;
+    await addLog({n,cal:+cal,p:+p||0,carb:+carb||0,f:+f||0},"100");
+    setCustomFood({show:false,n:"",cal:"",p:"",carb:"",f:""});
+  };
+
+  const removeLog=async id=>{
+    const all=await sg(K.macros)||{};
+    const key=memberId+viewDay;
+    all[key]=(all[key]||[]).filter(l=>l.id!==id);
+    await ssRetry(K.macros,all);setLogs(all[key]||[]);
+  };
+
+  const totCal=logs.reduce((s,l)=>s+l.cal,0);
+  const totP=Math.round(logs.reduce((s,l)=>s+l.p,0)*10)/10;
+  const totCarb=Math.round(logs.reduce((s,l)=>s+l.carb,0)*10)/10;
+  const totF=Math.round(logs.reduce((s,l)=>s+l.f,0)*10)/10;
+  const cur=FOOD_CATS[selCat];
+  const filtered=search?cur.items.filter(f=>f.n.includes(search)):cur.items;
+
+  return(
+    <div>
+      <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:3}}>
+        {Array.from({length:7}).map((_,i)=>{
+          const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().slice(0,10);
+          return(
+            <button key={ds} onClick={()=>setViewDay(ds)} style={{flexShrink:0,padding:"6px 10px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:viewDay===ds?E.neon:"transparent",color:viewDay===ds?"#000":E.dim2,border:`1px solid ${viewDay===ds?E.neon:"#1e1e1e"}`,fontWeight:viewDay===ds?700:400}}>
+              <div>{i===0?"اليوم":DAYS_AR[d.getDay()]}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:8,marginTop:1}}>{ds.slice(5)}</div>
+            </button>
+          );
+        })}
+      </div>
+      <Card style={{marginBottom:12}}>
+        <Orb t="📊 MACRO DASHBOARD"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:13}}>
+          {[[totCal,targetCals,"CAL",E.gold],[totP,targetPro,"PRO",E.neon],[totCarb,targetCarb,"CARB",E.gold],[totF,targetFat,"FAT","#fb923c"]].map(([v,t,l,c])=>(
+            <div key={l} style={{textAlign:"center"}}>
+              <Ring pct={t?Math.min(100,Math.round((v/t)*100)):0} size={52} stroke={5} color={c}/>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:10,fontWeight:700,color:c,marginTop:3}}>{v}{l!=="CAL"?"g":""}</div>
+              <div style={{fontSize:8,color:E.dim2}}>{l}{t>0?"/"+t+(l!=="CAL"?"g":""):""}</div>
+            </div>
+          ))}
+        </div>
+        {(targetCals||0)>0&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:E.dim2,marginBottom:4}}>
+              <span>{totCal} سعرة</span>
+              <span style={{color:totCal>=(targetCals||0)?E.neon:E.gold}}>{Math.max(0,(targetCals||0)-totCal)} متبقية</span>
+            </div>
+            <div style={{height:8,borderRadius:4,background:"#141414",overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:4,width:`${Math.min(100,(totCal/(targetCals||1))*100)}%`,background:totCal>(targetCals||9999)?E.red:`linear-gradient(90deg,${E.gold},${E.neon})`,transition:"width .6s"}}/>
+            </div>
+          </div>
+        )}
+      </Card>
+      {isToday&&(
+        <Card style={{marginBottom:12}}>
+          <Orb t="➕ إضافة وجبة"/>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:9}}>
+            {Object.entries(FOOD_CATS).map(([k,v])=>(
+              <button key={k} onClick={()=>{setSelCat(k);setSelFood(null);setSearch("");}} style={{padding:"5px 10px",borderRadius:5,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selCat===k?v.c:"transparent",color:selCat===k?"#000":E.dim2,border:`1px solid ${selCat===k?v.c:"#1e1e1e"}`,fontWeight:700}}>{v.label}</button>
+            ))}
+            <button onClick={()=>setCustomFood(p=>({...p,show:!p.show}))} style={{padding:"5px 10px",borderRadius:5,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:customFood.show?E.purple:"transparent",color:customFood.show?"#000":E.dim2,border:`1px solid ${customFood.show?E.purple:"#1e1e1e"}`,fontWeight:700}}>✏️ مخصص</button>
+          </div>
+          {customFood.show?(
+            <div style={{background:"#141414",borderRadius:8,padding:11,marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:8}}>
+                <div style={{gridColumn:"1/-1"}}><div style={{fontSize:9,color:E.dim2,marginBottom:3}}>اسم الطعام *</div><input value={customFood.n} onChange={e=>setCustomFood(p=>({...p,n:e.target.value}))} placeholder="مثال: برجر بيت" style={INP}/></div>
+                {[["السعرات *","cal"],["بروتين (g)","p"],["كارب (g)","carb"],["دهون (g)","f"]].map(([l,k])=>(
+                  <div key={k}><div style={{fontSize:9,color:E.dim2,marginBottom:3}}>{l}</div><input type="number" value={customFood[k]} onChange={e=>setCustomFood(p=>({...p,[k]:e.target.value}))} placeholder="0" style={INP}/></div>
+                ))}
+              </div>
+              <Btn label="➕ إضافة" onClick={addCustom} full color={E.purple}/>
+            </div>
+          ):(
+            <>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ابحث..." style={{...INP,marginBottom:9}}/>
+              <div style={{maxHeight:180,overflowY:"auto",marginBottom:selFood?10:0}}>
+                {filtered.map((f,i)=>(
+                  <div key={i} onClick={()=>{setSelFood(f);setAmount("100");}} style={{padding:"8px 10px",borderRadius:6,marginBottom:4,background:selFood===f?`${cur.c}15`:"#141414",border:`1px solid ${selFood===f?cur.c:"#1e1e1e"}`,cursor:"pointer"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontWeight:600,fontSize:12,color:selFood===f?cur.c:E.text}}>{f.n}</div>
+                      <div style={{display:"flex",gap:6}}>
+                        <span style={{fontSize:10,color:E.gold,fontFamily:"'Orbitron',monospace"}}>{f.cal}cal</span>
+                        <span style={{fontSize:10,color:E.neon,fontFamily:"'Orbitron',monospace"}}>P{f.p}g</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {selFood&&(
+                <div style={{background:`${cur.c}10`,border:`1px solid ${cur.c}33`,borderRadius:8,padding:11}}>
+                  <div style={{fontSize:12,fontWeight:700,color:cur.c,marginBottom:9}}>✓ {selFood.n}</div>
+                  <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} style={{...INP,textAlign:"center",marginBottom:8}}/>
+                  <div style={{display:"flex",gap:5,marginBottom:9}}>
+                    {[50,100,150,200,250,300].map(v=>(
+                      <button key={v} onClick={()=>setAmount(String(v))} style={{flex:1,padding:"5px 2px",borderRadius:4,fontSize:10,cursor:"pointer",fontFamily:"'Orbitron',monospace",background:+amount===v?cur.c:"transparent",color:+amount===v?"#000":E.dim2,border:`1px solid ${+amount===v?cur.c:"#1e1e1e"}`,fontWeight:700}}>{v}</button>
+                    ))}
+                  </div>
+                  <Btn label={`➕ إضافة ${amount}g`} onClick={()=>addLog(selFood,amount)} full/>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
+      {logs.length>0?(
+        <Card>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
+            <Orb t={`📋 سجل ${isToday?"اليوم":viewDay}`}/>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:10,color:E.gold}}>{totCal} CAL</div>
+          </div>
+          {logs.map(l=>(
+            <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid #1e1e1e`}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:600}}>{l.food} <span style={{color:E.dim2,fontWeight:400}}>{l.amount}g</span></div>
+                <div style={{display:"flex",gap:8,marginTop:2}}>
+                  <span style={{fontSize:10,color:E.gold,fontFamily:"'Orbitron',monospace"}}>{l.cal}cal</span>
+                  <span style={{fontSize:10,color:E.neon,fontFamily:"'Orbitron',monospace"}}>P:{l.p}g</span>
+                  <span style={{fontSize:10,color:E.gold,fontFamily:"'Orbitron',monospace"}}>C:{l.carb}g</span>
+                  <span style={{fontSize:10,color:"#fb923c",fontFamily:"'Orbitron',monospace"}}>F:{l.f}g</span>
+                </div>
+              </div>
+              <div style={{fontSize:9,color:E.dim2,fontFamily:"'Orbitron',monospace",flexShrink:0}}>{l.time}</div>
+              {isToday&&<Btn label="✕" onClick={()=>removeLog(l.id)} outline danger small/>}
+            </div>
+          ))}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:10,padding:"9px 8px",background:"#141414",borderRadius:7}}>
+            {[[totCal,"CAL",E.gold],[totP+"g","PRO",E.neon],[totCarb+"g","CARB",E.gold],[totF+"g","FAT","#fb923c"]].map(([v,l,c])=>(
+              <div key={l} style={{textAlign:"center"}}>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:12,fontWeight:800,color:c}}>{v}</div>
+                <div style={{fontSize:8,color:E.dim2,marginTop:1}}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ):(
+        <Card><div style={{textAlign:"center",padding:20,color:E.dim2}}><div style={{fontSize:24,marginBottom:8}}>🍽️</div><div style={{fontSize:12}}>{isToday?"لم تُضف أي وجبة اليوم":"لا توجد سجلات"}</div></div></Card>
+      )}
+    </div>
+  );
+}
+
+// ─── WORKOUT LOGGER ──────────────────────────────────────────
+function WorkoutLogger({memberId,plan,customPlan}){
+  // ── hooks أولاً دائماً ──
+  const [selWeek,setSelWeek]=useState(0);
+  const [selDay,setSelDay]=useState(0);
+  const [logs,setLogs]=useState({});
+  const [activeTimer,setActiveTimer]=useState(null);
+  const [timerTime,setTimerTime]=useState(0);
+  const [timerRunning,setTimerRunning]=useState(false);
+  const timerRef=useRef(null);
+
+  // ── derived values ──
+  const activePlan=customPlan||PLANS[plan]||PLANS["program3weeks"];
+  const isWeekly=!!(activePlan?.weeks&&!activePlan?.days);
+  const allDays=isWeekly?(activePlan.weeks[selWeek]?.days||[]):(activePlan?.days||[]);
+  const curDay=allDays[selDay]||allDays[0];
+  const exList=curDay?.mu?curDay.mu.flatMap(mu=>EX[mu]||[]):(curDay?.exercises||[]);
+  const isRestDay=!curDay||curDay?.mu?.length===0||!!(curDay?.l?.includes("راحة"));
+
+  useEffect(()=>{
+    (async()=>{const d=await sg(K.weightLogs)||{};setLogs(d);})();
+  },[]);
+
+  useEffect(()=>{
+    if(timerRunning&&timerTime>0){
+      timerRef.current=setInterval(()=>setTimerTime(t=>{if(t<=4&&t>1)beep(440+((4-t)*110),.06);return t-1;}),1000);
+    } else if(timerTime===0&&timerRunning){
+      setTimerRunning(false);clearInterval(timerRef.current);doneBeep();
+      if(navigator.vibrate)navigator.vibrate([200,100,200]);
+    }
+    return()=>clearInterval(timerRef.current);
+  },[timerRunning,timerTime]);
+
+  const startTimer=ex=>{clearInterval(timerRef.current);setActiveTimer(ex.id);setTimerTime(ex.rest||60);setTimerRunning(true);beep(660,.06);};
+
+  const logSet=async(exId,si,field,val)=>{
+    const key=memberId+"_"+todayStr();
+    setLogs(prev=>{
+      const next=JSON.parse(JSON.stringify(prev||{}));
+      if(!next[key])next[key]={};
+      if(!next[key][exId])next[key][exId]=[];
+      while(next[key][exId].length<=si)next[key][exId].push({reps:"",weight:""});
+      next[key][exId][si][field]=val;
+      return next;
+    });
+    try{
+      const all=await sg(K.weightLogs)||{};
+      if(!all[key])all[key]={};
+      if(!all[key][exId])all[key][exId]=[];
+      while(all[key][exId].length<=si)all[key][exId].push({reps:"",weight:""});
+      all[key][exId][si][field]=val;
+      await ssRetry(K.weightLogs,all);
+    }catch(e){}
+  };
+
+  const getLog=(exId,si,field)=>logs[memberId+"_"+todayStr()]?.[exId]?.[si]?.[field]||"";
+
+  return(
+    <div>
+      <Orb t="🏋️ WORKOUT"/>
+      {activePlan?.name&&(
+        <div style={{marginBottom:11,padding:"8px 12px",background:`${E.neon}10`,border:`1px solid ${E.neon}33`,borderRadius:7}}>
+          <div style={{fontSize:12,fontWeight:700,color:E.neon}}>{activePlan.name}</div>
+          <div style={{fontSize:10,color:E.dim2}}>برنامج مخصص</div>
+        </div>
+      )}
+      {isWeekly&&(
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:9,color:E.dim2,letterSpacing:2,marginBottom:6}}>الأسبوع</div>
+          <div style={{display:"flex",gap:6}}>
+            {activePlan.weeks.map((w,i)=>(
+              <button key={i} onClick={()=>{setSelWeek(i);setSelDay(0);}} style={{flex:1,padding:"7px 5px",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selWeek===i?E.gold:"transparent",color:selWeek===i?"#000":E.dim2,border:`1px solid ${selWeek===i?E.gold:"#1e1e1e"}`,fontWeight:selWeek===i?700:400}}>
+                {w.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+        {allDays.map((d,i)=>{
+          const isRest=d.mu?.length===0||d.l?.includes("راحة");
+          return(
+            <button key={i} onClick={()=>setSelDay(i)} style={{padding:"5px 10px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selDay===i?(isRest?"#333":E.neon):"transparent",color:selDay===i?(isRest?E.dim2:"#000"):E.dim2,border:`1px solid ${selDay===i?(isRest?"#555":E.neon):"#1e1e1e"}`,fontWeight:selDay===i?700:400}}>
+              {d.d}
+            </button>
+          );
+        })}
+      </div>
+      {curDay&&(
+        <div style={{marginBottom:12,padding:"8px 12px",background:isRestDay?"#141414":`${E.neon}08`,border:`1px solid ${isRestDay?"#333":E.neon+"33"}`,borderRadius:7}}>
+          <div style={{fontSize:12,fontWeight:700,color:isRestDay?E.dim2:E.neon}}>{curDay.l}</div>
+        </div>
+      )}
+      {timerRunning&&(
+        <div style={{background:`${E.neon}10`,border:`1px solid ${E.neon}`,borderRadius:8,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:22,fontWeight:900,color:E.neon}}>{fmt(timerTime)}</div>
+          <div style={{flex:1,fontSize:12,color:E.dim2}}>راحة جارية...</div>
+          <Btn label="تخطي" onClick={()=>{setTimerRunning(false);clearInterval(timerRef.current);}} outline small/>
+        </div>
+      )}
+      {isRestDay?(
+        <Card style={{textAlign:"center",padding:30}}>
+          <div style={{fontSize:36,marginBottom:10}}>😴</div>
+          <div style={{fontSize:16,fontWeight:700,color:E.dim2,marginBottom:6}}>يوم راحة</div>
+          <div style={{fontSize:12,color:E.dim2}}>استرح اليوم — جسمك يبني العضل خلال الراحة 💪</div>
+        </Card>
+      ):exList.map((ex,ei)=>{
+        const sets=Array.from({length:ex.s||ex.sets||3});
+        return(
+          <Card key={ex.id||ei} style={{marginBottom:10,border:`1px solid ${activeTimer===ex.id&&timerRunning?E.neon:"#1e1e1e"}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <div style={{fontSize:20}}>{ex.i||"🏋️"}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700}}>{ex.n||ex.name}</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1}}>{ex.s||ex.sets} سيت × {ex.r||ex.reps}</div>
+              </div>
+              {(ex.video||ex.url)&&(
+                <button onClick={()=>{const url=ex.video||ex.url;const ytId=url.match(/(?:v=|youtu\.be\/)([^&?\s]+)/)?.[1];window.open(ytId?`https://youtube.com/watch?v=${ytId}`:url,"_blank");}} style={{padding:"4px 9px",borderRadius:4,background:`${E.red}20`,color:E.red,border:`1px solid ${E.red}44`,fontSize:10,cursor:"pointer",fontWeight:700}}>▶</button>
+              )}
+              {(ex.rest||0)>0&&(
+                <button onClick={()=>startTimer(ex)} style={{padding:"4px 9px",borderRadius:4,background:activeTimer===ex.id&&timerRunning?E.neon:"transparent",color:activeTimer===ex.id&&timerRunning?"#000":E.dim2,border:`1px solid ${activeTimer===ex.id&&timerRunning?E.neon:"#1e1e1e"}`,fontFamily:"'Orbitron',monospace",fontSize:9,cursor:"pointer",fontWeight:700}}>
+                  {activeTimer===ex.id&&timerRunning?`⏱${fmt(timerTime)}`:`▶${(ex.rest||0)<60?(ex.rest||0)+"s":(ex.rest||0)/60+"m"}`}
+                </button>
+              )}
+            </div>
+            {ex.note&&<div style={{fontSize:11,color:E.gold,marginBottom:8,padding:"5px 8px",background:`${E.gold}10`,borderRadius:5,borderRight:`2px solid ${E.gold}`}}>{ex.note}</div>}
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr 1fr",gap:6,marginBottom:4}}>
+              <div style={{fontSize:9,color:E.dim2,fontFamily:"'Orbitron',monospace",padding:"4px 0"}}>SET</div>
+              <div style={{fontSize:9,color:E.dim2,textAlign:"center",padding:"4px 0"}}>الوزن (kg)</div>
+              <div style={{fontSize:9,color:E.dim2,textAlign:"center",padding:"4px 0"}}>التكرارات</div>
+            </div>
+            {sets.map((_,si)=>(
+              <div key={si} style={{display:"grid",gridTemplateColumns:"auto 1fr 1fr",gap:6,marginBottom:5,alignItems:"center"}}>
+                <div style={{fontFamily:"'Orbitron',monospace",fontSize:11,fontWeight:700,color:E.neon,width:22,textAlign:"center"}}>{si+1}</div>
+                <input type="number" placeholder="0 kg" value={getLog(ex.id||"ex"+ei,si,"weight")} onChange={e=>logSet(ex.id||"ex"+ei,si,"weight",e.target.value)}
+                  style={{...INP,padding:"6px 9px",textAlign:"center",fontFamily:"'Orbitron',monospace"}}/>
+                <input type="number" placeholder={ex.r||ex.reps||"10"} value={getLog(ex.id||"ex"+ei,si,"reps")} onChange={e=>logSet(ex.id||"ex"+ei,si,"reps",e.target.value)}
+                  style={{...INP,padding:"6px 9px",textAlign:"center",fontFamily:"'Orbitron',monospace"}}/>
+              </div>
+            ))}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function WorkoutLoggerWrapper({memberId,plan}){
+  const [customPlan,setCustomPlan]=useState(null);
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{const data=await sg(K.customPlans)||{};const plans=(data[memberId]||[]);if(plans.length>0)setCustomPlan(plans[0]);}catch(e){}
+      setLoaded(true);
+    })();
+  },[memberId]);
+  if(!loaded)return <div style={{textAlign:"center",padding:30,color:E.dim2,fontFamily:"'Orbitron',monospace",fontSize:11}}>LOADING...</div>;
+  return <WorkoutLogger memberId={memberId} plan={plan} customPlan={customPlan}/>;
+}
+
+// ─── CUSTOM PLANS ────────────────────────────────────────────
+function CustomPlans({memberId,isTrainer,members}){
+  const [plans,setPlans]=useState({});
+  const [selMember,setSelMember]=useState(memberId||"");
+  const [editing,setEditing]=useState(false);
+  const [planName,setPlanName]=useState("");
+  const [days,setDays]=useState([{d:"اليوم الأول",exercises:[]}]);
+  const [status,setStatus]=useState({t:"",m:""});
+  const [loaded,setLoaded]=useState(false);
+
+  useEffect(()=>{if(isTrainer&&members.length>0&&!selMember)setSelMember(members[0].id);},[members,isTrainer,memberId]);
+
+  const loadPlans=useCallback(async()=>{
+    try{const d=await sg(K.customPlans)||{};setPlans(d);}catch(e){}
+    setLoaded(true);
+  },[]);
+
+  useEffect(()=>{loadPlans();const t=setInterval(loadPlans,5000);return()=>clearInterval(t);},[loadPlans]);
+
+  const savePlan=async()=>{
+    if(!planName.trim()){setStatus({t:"err",m:"أدخل اسم البرنامج"});return;}
+    if(!selMember){setStatus({t:"err",m:"اختر متدرباً"});return;}
+    setStatus({t:"saving",m:"⏳ جاري الحفظ..."});
+    try{
+      const current=await sg(K.customPlans)||{};
+      const arr=Array.isArray(current[selMember])?JSON.parse(JSON.stringify(current[selMember])):[];
+      const idx=arr.findIndex(p=>p.name===planName.trim());
+      const planId=idx>=0?(arr[idx].id||Date.now()):Date.now();
+      const obj={id:planId,name:planName.trim(),days:JSON.parse(JSON.stringify(days)),memberId:selMember,created:todayStr()};
+      if(idx>=0)arr[idx]=obj;else arr.push(obj);
+      const toSave={...current,[selMember]:arr};
+      await ssRetry(K.customPlans,toSave);
+      // Verify
+      await new Promise(r=>setTimeout(r,150));
+      const verify=await sg(K.customPlans)||{};
+      const confirmed=(verify[selMember]||[]).find(p=>p.id===planId);
+      if(confirmed){setPlans(JSON.parse(JSON.stringify(verify)));}else{setPlans(JSON.parse(JSON.stringify(toSave)));}
+      setEditing(false);
+      setStatus({t:"ok",m:"✅ تم الحفظ!"});
+      beep(880,.07);setTimeout(()=>beep(1100,.12),140);
+      setTimeout(()=>setStatus({t:"",m:""}),4000);
+    }catch(e){setStatus({t:"err",m:"خطأ في الحفظ — حاول مرة أخرى"});}
+  };
+
+  const delPlan=async(mId,id)=>{
+    const all=await sg(K.customPlans)||{};
+    all[mId]=(all[mId]||[]).filter(p=>p.id!==id);
+    await ssRetry(K.customPlans,all);setPlans({...all});
+  };
+
+  const addDay=()=>setDays(p=>[...p,{d:"اليوم "+(p.length+1),exercises:[]}]);
+  const removeDay=di=>setDays(p=>p.filter((_,i)=>i!==di));
+  const updDayName=(di,v)=>setDays(p=>{const c=[...p];c[di]={...c[di],d:v};return c;});
+  const addEx=di=>setDays(p=>{const c=JSON.parse(JSON.stringify(p));c[di].exercises=[...(c[di].exercises||[]),{id:"ex"+Date.now(),name:"",sets:4,reps:"10-12",rest:90,video:"",note:""}];return c;});
+  const updEx=(di,ei,k,v)=>setDays(p=>{const c=JSON.parse(JSON.stringify(p));c[di].exercises[ei][k]=v;return c;});
+  const remEx=(di,ei)=>setDays(p=>{const c=JSON.parse(JSON.stringify(p));c[di].exercises.splice(ei,1);return c;});
+  const startEdit=(plan=null)=>{if(plan){setPlanName(plan.name);setDays(JSON.parse(JSON.stringify(plan.days)));}else{setPlanName("");setDays([{d:"اليوم الأول",exercises:[]}]);}setStatus({t:"",m:""});setEditing(true);};
+
+  // ── Member view ──
+  if(!isTrainer){
+    return(
+      <div>
+        <Orb t="📋 برنامجي المخصص"/>
+        {!loaded&&<div style={{textAlign:"center",color:E.dim2,padding:20,fontFamily:"'Orbitron',monospace",fontSize:11}}>LOADING...</div>}
+        {loaded&&(plans[memberId]||[]).length===0&&(
+          <Card><div style={{textAlign:"center",padding:16}}>
+            <div style={{fontSize:24,marginBottom:8}}>📋</div>
+            <div style={{fontSize:13,color:E.text,fontWeight:600}}>لا يوجد برنامج مخصص بعد</div>
+            <div style={{fontSize:11,color:E.dim2,marginTop:4}}>سيضيفه مدربك قريباً</div>
+          </div></Card>
+        )}
+        {(plans[memberId]||[]).map(plan=>(
+          <Card key={plan.id||plan.name} neon style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{fontSize:15,fontWeight:800,color:E.neon}}>{plan.name}</div>
+              <Tag c={E.dim2}>{plan.created}</Tag>
+            </div>
+            {plan.days.map((d,i)=>(
+              <div key={i} style={{marginBottom:9,background:"#141414",borderRadius:7,padding:"9px 11px"}}>
+                <div style={{fontSize:12,fontWeight:700,color:E.gold,marginBottom:6}}>{d.d}</div>
+                {(d.exercises||[]).length===0&&<div style={{fontSize:11,color:E.dim2}}>لا تمارين</div>}
+                {(d.exercises||[]).map((ex,j)=>(
+                  <div key={j} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid #1e1e1e`}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600}}>{ex.name||"—"}</div>
+                      {ex.note&&<div style={{fontSize:10,color:E.dim2,marginTop:1}}>{ex.note}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:4,flexShrink:0}}>
+                      <Tag c={E.neon}>{ex.sets}×</Tag>
+                      <Tag c={E.gold}>{ex.reps}</Tag>
+                      {(ex.rest||0)>0&&<Tag c={E.dim2}>{(ex.rest||0)<60?(ex.rest||0)+"ث":(ex.rest||0)/60+"د"}</Tag>}
+                    </div>
+                    {ex.video&&<button onClick={()=>{const ytId=ex.video.match(/(?:v=|youtu\.be\/)([^&?\s]+)/)?.[1];window.open(ytId?`https://youtube.com/watch?v=${ytId}`:ex.video,"_blank");}} style={{padding:"3px 7px",borderRadius:4,background:`${E.red}20`,color:E.red,border:`1px solid ${E.red}44`,fontSize:10,cursor:"pointer",fontWeight:700}}>▶</button>}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Trainer view ──
+  return(
+    <div>
+      <Orb t="📋 CUSTOM PLANS"/>
+      {status.m&&<div style={{marginBottom:12,padding:"10px 14px",background:status.t==="ok"?`${E.neon}15`:status.t==="saving"?`${E.gold}15`:`${E.red}15`,border:`1px solid ${status.t==="ok"?E.neon:status.t==="saving"?E.gold:E.red}`,borderRadius:7,fontSize:13,color:status.t==="ok"?E.neon:status.t==="saving"?E.gold:E.red,fontWeight:700}}>{status.m}</div>}
+      {members.length===0?(
+        <Card style={{marginBottom:12,textAlign:"center"}}><div style={{padding:12,fontSize:12,color:E.dim2}}>أضف متدربين أولاً</div></Card>
+      ):(
+        <div style={{marginBottom:13}}>
+          <div style={{fontSize:9,color:E.dim2,letterSpacing:2,marginBottom:7}}>اختر المتدرب</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {members.map(m=>(
+              <button key={m.id} onClick={()=>{setSelMember(m.id);setEditing(false);setStatus({t:"",m:""});}} style={{padding:"7px 13px",borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selMember===m.id?E.neon:"transparent",color:selMember===m.id?"#000":E.dim2,border:`1px solid ${selMember===m.id?E.neon:"#1e1e1e"}`,fontWeight:700}}>
+                {m.name.split(" ")[0]}
+                <span style={{display:"block",fontSize:8,opacity:.6,fontFamily:"'Orbitron',monospace",marginTop:1}}>{(plans[m.id]||[]).length} برنامج</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {selMember&&!editing&&(
+        <>
+          <Btn label="➕ إنشاء برنامج جديد" onClick={()=>startEdit(null)} full style={{marginBottom:12}}/>
+          {loaded&&(plans[selMember]||[]).length===0&&<Card><div style={{textAlign:"center",color:E.dim2,padding:12,fontSize:12}}>لا توجد برامج لهذا المتدرب</div></Card>}
+          {(plans[selMember]||[]).map(plan=>(
+            <Card key={plan.id||plan.name} style={{marginBottom:9,border:`1px solid ${E.neon}33`}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:E.neon}}>{plan.name}</div>
+                  <div style={{fontSize:10,color:E.dim2,marginTop:2,fontFamily:"'Orbitron',monospace"}}>{plan.days.length} أيام · {plan.days.reduce((s,d)=>s+(d.exercises||[]).length,0)} تمرين · {plan.created}</div>
+                </div>
+                <div style={{display:"flex",gap:5}}>
+                  <Btn label="تعديل" onClick={()=>startEdit(plan)} outline small/>
+                  <Btn label="حذف" onClick={()=>delPlan(selMember,plan.id||plan.name)} danger outline small/>
+                </div>
+              </div>
+              {plan.days.map((d,i)=>(
+                <div key={i} style={{marginBottom:5,background:"#141414",borderRadius:6,padding:"7px 10px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:E.gold,marginBottom:4}}>{d.d}</div>
+                  {(d.exercises||[]).map((ex,j)=>(
+                    <div key={j} style={{fontSize:11,padding:"2px 0 2px 8px",borderRight:`2px solid ${E.neon}33`,marginBottom:2,display:"flex",gap:6,alignItems:"center"}}>
+                      <span style={{flex:1,color:E.text}}>{ex.name||"—"}</span>
+                      <span style={{color:E.dim2,fontSize:10}}>{ex.sets}×{ex.reps}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </Card>
+          ))}
+        </>
+      )}
+      {selMember&&editing&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:13}}>
+            <div style={{fontSize:12,fontWeight:700,color:E.neon}}>{planName||"برنامج جديد"}</div>
+            <Btn label="✕ إلغاء" onClick={()=>{setEditing(false);setStatus({t:"",m:""}); }} outline small danger/>
+          </div>
+          <Card style={{marginBottom:11}}>
+            <div style={{fontSize:10,color:E.dim2,marginBottom:5}}>اسم البرنامج *</div>
+            <input value={planName} onChange={e=>setPlanName(e.target.value)} placeholder="مثال: برنامج التضخيم"
+              style={{...INP,fontWeight:700,borderColor:planName?E.neon:"#1e1e1e"}}
+              onFocus={e=>e.target.style.borderColor=E.neon} onBlur={e=>e.target.style.borderColor=planName?E.neon:"#1e1e1e"}/>
+          </Card>
+          {days.map((day,di)=>(
+            <Card key={di} style={{marginBottom:10,border:`1px solid ${E.gold}33`}}>
+              <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:9}}>
+                <input value={day.d} onChange={e=>updDayName(di,e.target.value)} style={{...INP,flex:1,fontWeight:700,color:E.gold}}
+                  onFocus={e=>e.target.style.borderColor=E.gold} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+                <Btn label="➕ تمرين" onClick={()=>addEx(di)} small color={E.gold}/>
+                {days.length>1&&<Btn label="✕" onClick={()=>removeDay(di)} danger outline small/>}
+              </div>
+              {(day.exercises||[]).length===0&&<div style={{textAlign:"center",padding:"11px 0",color:E.dim2,fontSize:11,border:`1px dashed #1e1e1e`,borderRadius:6}}>اضغط "➕ تمرين" للإضافة</div>}
+              {(day.exercises||[]).map((ex,ei)=>(
+                <div key={ei} style={{background:"#141414",borderRadius:7,padding:11,marginBottom:8,border:`1px solid #1e1e1e`}}>
+                  <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:7}}>
+                    <input value={ex.name} onChange={e=>updEx(di,ei,"name",e.target.value)} placeholder={`التمرين ${ei+1}`}
+                      style={{...INP,flex:1,fontWeight:600}}
+                      onFocus={e=>e.target.style.borderColor=E.neon} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+                    <Btn label="✕" onClick={()=>remEx(di,ei)} danger outline small/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
+                    {[["السيتات","sets","number","4"],["التكرارات","reps","text","8-12"],["راحة (ث)","rest","number","90"]].map(([l,k,t,ph])=>(
+                      <div key={k}>
+                        <div style={{fontSize:9,color:E.dim2,marginBottom:3}}>{l}</div>
+                        <input type={t} value={ex[k]} onChange={e=>updEx(di,ei,k,t==="number"?+e.target.value:e.target.value)} placeholder={ph}
+                          style={{...INP,padding:"6px 8px",textAlign:"center"}}
+                          onFocus={e=>e.target.style.borderColor=E.neon} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginBottom:7}}>
+                    <div style={{fontSize:9,color:E.dim2,marginBottom:3}}>ملاحظة للمتدرب</div>
+                    <input value={ex.note||""} onChange={e=>updEx(di,ei,"note",e.target.value)} placeholder="نصيحة أو تكنيك..."
+                      style={{...INP,fontSize:"14px"}}
+                      onFocus={e=>e.target.style.borderColor=E.gold} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:9,color:E.dim2,marginBottom:3}}>رابط يوتيوب (اختياري)</div>
+                    <input value={ex.video||""} onChange={e=>updEx(di,ei,"video",e.target.value)} placeholder="https://youtube.com/..."
+                      style={{...INP,direction:"ltr",textAlign:"right"}}
+                      onFocus={e=>e.target.style.borderColor=E.red} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          ))}
+          <Btn label="➕ إضافة يوم" onClick={addDay} outline full style={{marginBottom:10}}/>
+          <button onClick={savePlan} disabled={status.t==="saving"}
+            style={{width:"100%",padding:"14px",borderRadius:8,background:status.t==="saving"?E.neonDim:`linear-gradient(135deg,${E.neon},${E.neonDim})`,color:"#000",border:"none",fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:900,cursor:status.t==="saving"?"wait":"pointer",letterSpacing:2,boxShadow:`0 0 20px ${E.neonGlow}`}}>
+            {status.t==="saving"?"⏳ SAVING...":"💾 SAVE PLAN"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MESSAGING ────────────────────────────────────────────────
+function Messaging({myId,myName,isTrainer,members}){
+  const [convId,setConvId]=useState(null);
+  const [msgs,setMsgs]=useState({});
+  const [text,setText]=useState("");
+  const bottomRef=useRef(null);
+
+  useEffect(()=>{
+    const load=async()=>{const d=await sg(K.msgs)||{};setMsgs(d);};
+    load();const t=setInterval(load,3000);return()=>clearInterval(t);
+  },[]);
+
+  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,convId]);
+
+  const effId=isTrainer?convId:"trainer_"+myId;
+  const convMsgs=msgs[effId]||[];
+  const unread=id=>(msgs[id]||[]).filter(m=>m.from!==myId&&!m.read).length;
+
+  const send=async()=>{
+    if(!text.trim()||!effId)return;
+    const msg={id:Date.now(),from:myId,fromName:myName,text:text.trim(),time:timeStr(),date:todayStr(),read:false};
+    const updated={...msgs,[effId]:[...(msgs[effId]||[]),msg]};
+    setMsgs(updated);setText("");
+    await ssRetry(K.msgs,updated);
+    const notifs=await sg(K.notifs)||{};
+    const target=isTrainer?convId.replace("trainer_",""):"trainer";
+    const list=notifs[target]||[];
+    list.push({id:Date.now(),text:`رسالة من ${myName}`,time:timeStr(),read:false});
+    notifs[target]=list.slice(-20);
+    await ssRetry(K.notifs,notifs);
+    beep(880,.05);
+  };
+
+  const markRead=async id=>{
+    const u={...msgs};
+    if(u[id])u[id]=u[id].map(m=>m.from!==myId?{...m,read:true}:m);
+    setMsgs(u);await ss(K.msgs,u);
+  };
+
+  if(isTrainer&&!convId){
+    return(
+      <div>
+        <Orb t="💬 MESSAGES"/>
+        {members.map(m=>{
+          const cid="trainer_"+m.id;const un=unread(cid);const last=(msgs[cid]||[]).slice(-1)[0];
+          return(
+            <Card key={m.id} onClick={()=>{setConvId(cid);markRead(cid);}} style={{marginBottom:8,border:`1px solid ${un>0?E.neon:"#1e1e1e"}`,display:"flex",alignItems:"center",gap:11}}>
+              <div style={{width:38,height:38,borderRadius:7,background:`linear-gradient(135deg,${E.neonDim},${E.neon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#000",fontFamily:"'Orbitron',monospace",flexShrink:0}}>{m.name[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13,color:un>0?E.neon:E.text}}>{m.name}</div>
+                <div style={{fontSize:11,color:E.dim2,marginTop:1}}>{last?last.text.slice(0,30)+"...":"لا توجد رسائل"}</div>
+              </div>
+              {un>0&&<span style={{background:E.red,borderRadius:20,padding:"2px 7px",fontSize:11,color:"#fff",fontWeight:700}}>{un}</span>}
+              <div style={{color:E.neon,fontSize:14,fontFamily:"'Orbitron',monospace"}}>→</div>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const partnerName=isTrainer?(members.find(m=>"trainer_"+m.id===convId)?.name||""):"المدرب";
+  return(
+    <div>
+      {isTrainer&&<div style={{display:"flex",alignItems:"center",gap:9,marginBottom:12}}><Btn label="←" onClick={()=>setConvId(null)} outline small/><Orb t={`💬 ${partnerName}`}/></div>}
+      {!isTrainer&&<Orb t={`💬 ${partnerName}`}/>}
+      <div style={{background:"#0f0f0f",border:`1px solid #1e1e1e`,borderRadius:8,height:320,overflowY:"auto",padding:12,marginBottom:9,display:"flex",flexDirection:"column",gap:8}}>
+        {convMsgs.length===0&&<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:E.dim2,fontSize:11,fontFamily:"'Orbitron',monospace",letterSpacing:2}}>NO MESSAGES</div>}
+        {convMsgs.map(m=>(
+          <div key={m.id} style={{display:"flex",flexDirection:"column",alignItems:m.from===myId?"flex-end":"flex-start"}}>
+            <div style={{maxWidth:"80%",background:m.from===myId?`${E.neon}18`:"#141414",border:`1px solid ${m.from===myId?E.neon:"#1e1e1e"}`,borderRadius:m.from===myId?"9px 9px 2px 9px":"9px 9px 9px 2px",padding:"8px 11px"}}>
+              <div style={{fontSize:13,color:m.from===myId?E.neon:E.text}}>{m.text}</div>
+              <div style={{fontSize:8,color:E.dim2,marginTop:3,textAlign:"left",fontFamily:"'Orbitron',monospace"}}>{m.time} {m.from===myId&&(m.read?"✓✓":"✓")}</div>
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef}/>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="اكتب رسالة..." style={{...INP,flex:1}}/>
+        <Btn label="إرسال ➤" onClick={send} disabled={!text.trim()}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── ATTENDANCE ───────────────────────────────────────────────
+function Attendance({memberId,memberName,isTrainer,members}){
+  const [att,setAtt]=useState({});
+  useEffect(()=>{
+    const load=async()=>{const d=await sg(K.att)||{};setAtt(d);};
+    load();const t=setInterval(load,5000);return()=>clearInterval(t);
+  },[]);
+
+  const checkIn=async()=>{
+    const today=todayStr();const key=memberId+"_"+today;
+    if(att[key])return;
+    const updated={...att,[key]:{memberId,memberName,date:today,time:timeStr(),week:weekKey()}};
+    setAtt(updated);await ssRetry(K.att,updated);
+    beep(880,.07);setTimeout(()=>beep(1100,.1),120);
+    const notifs=await sg(K.notifs)||{};
+    const tList=notifs["trainer"]||[];
+    tList.push({id:Date.now(),text:`✅ ${memberName} سجّل حضوره`,time:timeStr(),read:false,type:"checkin"});
+    notifs["trainer"]=tList.slice(-30);await ssRetry(K.notifs,notifs);
+  };
+
+  const checkedToday=!!att[memberId+"_"+todayStr()];
+  const getLast7=mId=>{
+    const days=[];
+    for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().slice(0,10);days.push({date:ds,checked:!!att[mId+"_"+ds],label:["أح","اث","ثل","أر","خم","جم","سب"][d.getDay()]});}
+    return days;
+  };
+  const getWk=mId=>Object.keys(att).filter(k=>k.startsWith(mId+"_")&&att[k]?.week===weekKey()).length;
+
+  if(!isTrainer){
+    const days7=getLast7(memberId);const wkCnt=getWk(memberId);
+    return(
+      <div>
+        <Card style={{marginBottom:12,textAlign:"center",border:`1px solid ${checkedToday?E.neon:"#1e1e1e"}`,boxShadow:checkedToday?`0 0 20px ${E.neonGlow}`:"none"}}>
+          <Orb t="DAILY CHECK-IN"/>
+          {checkedToday?(
+            <><div style={{fontSize:38,marginBottom:6}}>✅</div><div style={{fontFamily:"'Orbitron',monospace",fontSize:13,color:E.neon,fontWeight:900}}>CHECKED IN TODAY!</div></>
+          ):(
+            <><div style={{fontSize:38,marginBottom:8}}>🏋️</div><div style={{fontSize:13,color:E.text,fontWeight:700,marginBottom:10}}>هل جاهز للتمرين؟</div><Btn label="✅ سجّل حضورك الآن" onClick={checkIn} full/></>
+          )}
+        </Card>
+        <Card style={{marginBottom:12}}>
+          <Orb t="LAST 7 DAYS"/>
+          <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:11}}>
+            {days7.map((d,i)=>(
+              <div key={i} style={{flex:1,textAlign:"center"}}>
+                <div style={{width:"100%",aspectRatio:"1",borderRadius:5,background:d.checked?`${E.neon}20`:"#141414",border:`1px solid ${d.checked?E.neon:"#1e1e1e"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,marginBottom:3}}>{d.checked?"✅":"○"}</div>
+                <div style={{fontSize:9,color:d.checked?E.neon:E.dim2,fontWeight:700}}>{d.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,fontWeight:900,color:E.neon}}>{wkCnt}</div>
+            <div style={{fontSize:10,color:E.dim2}}>أيام هذا الأسبوع</div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return(
+    <div>
+      <Orb t="ATTENDANCE OVERVIEW"/>
+      {members.map(m=>{
+        const days7=getLast7(m.id);const wkCnt=getWk(m.id);const here=!!att[m.id+"_"+todayStr()];
+        return(
+          <Card key={m.id} style={{marginBottom:9,border:`1px solid ${here?E.neon:"#1e1e1e"}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+              <div style={{width:32,height:32,borderRadius:6,background:`linear-gradient(135deg,${E.neonDim},${E.neon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",fontFamily:"'Orbitron',monospace",flexShrink:0}}>{m.name[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1}}>الأسبوع: {wkCnt} أيام</div>
+              </div>
+              <Tag c={here?E.neon:E.dim2}>{here?"✅ حاضر":"غائب"}</Tag>
+            </div>
+            <div style={{display:"flex",gap:4}}>
+              {days7.map((d,i)=><div key={i} style={{flex:1,height:18,borderRadius:3,background:d.checked?E.neon:"#141414",border:`1px solid ${d.checked?E.neon:"#1e1e1e"}`,transition:"all .2s"}}/>)}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── WEEKLY REPORT ────────────────────────────────────────────
+function WeeklyReport({memberId,memberData,isTrainer,members,allAtt}){
+  const [selM,setSelM]=useState(memberId||"");
+  useEffect(()=>{if(isTrainer&&members.length>0&&!selM)setSelM(members[0].id);},[members,isTrainer]);
+  const me=isTrainer?(members.find(m=>m.id===selM)||members[0]):memberData;
+  if(!me)return null;
+  const pl=PLANS[me.plan]||PLANS["program3weeks"];
+  const planDays=pl?.days?.length||(pl?.weeks?.reduce((s,w)=>s+w.days.filter(d=>d.mu?.length>0).length,0))||18;
+  const attWk=Object.keys(allAtt||{}).filter(k=>k.startsWith(me.id+"_")&&allAtt[k]?.week===weekKey()).length;
+  const attPct=Math.min(100,Math.round((attWk/Math.max(1,planDays/3))*100));
+  const totalAtt=Object.keys(allAtt||{}).filter(k=>k.startsWith(me.id+"_")).length;
+  const wtChange=me.prog&&me.prog.length>=2?(me.prog[me.prog.length-1].w-me.prog[0].w).toFixed(1):0;
+  const goalPct=Math.min(100,Math.round(Math.max(0,me.goal==="bulk"?(+wtChange/4*100):(-wtChange/4*100))));
+  const score=Math.round((attPct*.5)+(goalPct*.3)+(me.pts>300?20:me.pts>150?10:5));
+  const sc=score>=80?E.neon:score>=60?E.gold:score>=40?"#fb923c":E.red;
+  const cs=calcCals(me.wt||75,me.ht||175,me.goal||"bulk");
+  const fc=fatCat(me.fat||20);
+
+  return(
+    <div>
+      <Orb t="📊 WEEKLY REPORT"/>
+      {isTrainer&&(
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
+          {members.map(m=>(
+            <button key={m.id} onClick={()=>setSelM(m.id)} style={{padding:"5px 11px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selM===m.id?E.neon:"transparent",color:selM===m.id?"#000":E.dim2,border:`1px solid ${selM===m.id?E.neon:"#1e1e1e"}`,fontWeight:700}}>{m.name.split(" ")[0]}</button>
+          ))}
+        </div>
+      )}
+      <div style={{background:`linear-gradient(135deg,#050505,#0a1a0a)`,border:`2px solid ${sc}`,borderRadius:12,padding:"18px",marginBottom:11,textAlign:"center"}}>
+        <div style={{fontSize:9,color:E.dim2,letterSpacing:3,marginBottom:6}}>WEEKLY SCORE</div>
+        <div style={{fontFamily:"'Orbitron',monospace",fontSize:52,fontWeight:900,color:sc,textShadow:`0 0 15px ${sc}`,lineHeight:1}}>{score}</div>
+        <div style={{fontSize:14,fontWeight:700,color:sc,marginTop:5}}>{score>=80?"ممتاز 🏆":score>=60?"جيد جداً 💪":score>=40?"مقبول 📊":"يحتاج تحسين ⚠️"}</div>
+        <div style={{fontSize:10,color:E.dim2,marginTop:3}}>{me.name}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:11}}>
+        {[[attPct,"الحضور",E.neon,attWk+" يوم"],[goalPct,"هدف الوزن",E.cyan,goalPct+"%"],[Math.min(100,(me.pts/500)*100),"النقاط",E.gold,"⭐"+me.pts],[Math.min(100,(totalAtt/50)*100),"إجمالي الحضور",E.purple,totalAtt+" يوم"]].map(([p,l,c,v])=>(
+          <Card key={l} style={{textAlign:"center",border:`1px solid ${c}22`}}><Ring pct={p} size={56} stroke={5} color={c} val={v} label={l}/></Card>
+        ))}
+      </div>
+      <Card style={{marginBottom:11}}>
+        <Orb t="BODY METRICS"/>
+        {[["الوزن",me.wt+" kg",E.gold],["السعرات",cs+" kcal",E.neon],["الدهون",me.fat+"% — "+fc.t,fc.c],["تغيير الوزن",(+wtChange>0?"+":"")+wtChange+" kg",+wtChange>0&&me.goal==="bulk"?E.neon:+wtChange<0&&me.goal==="cut"?E.neon:E.red]].map(([l,v,c])=>(
+          <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid #1e1e1e`}}>
+            <span style={{fontSize:12,color:E.dim2}}>{l}</span>
+            <span style={{fontFamily:"'Orbitron',monospace",fontSize:11,fontWeight:700,color:c}}>{v}</span>
+          </div>
+        ))}
+      </Card>
+      <Card style={{background:`${sc}08`,border:`1px solid ${sc}33`}}>
+        <Orb t="💡 COACH NOTES"/>
+        <div style={{fontSize:13,color:E.text,lineHeight:2}}>
+          {attPct<50&&"⚠️ الحضور منخفض هذا الأسبوع. "}
+          {attPct>=80&&"✅ حضور ممتاز — استمر! "}
+          {me.goal==="bulk"&&+wtChange<=0&&"📈 وزنك لم يتغير — زد السعرات. "}
+          {me.goal==="cut"&&+wtChange>=0&&"🔥 قلل السعرات. "}
+          {me.pts<100&&"⭐ شارك في التحديات. "}
+          {score>=80&&"🏆 أداء متميز!"}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────
+function Notifs({myId}){
+  const [notifs,setNotifs]=useState([]);
+  useEffect(()=>{
+    const load=async()=>{const d=await sg(K.notifs)||{};setNotifs(d[myId]||[]);};
+    load();const t=setInterval(load,4000);return()=>clearInterval(t);
+  },[myId]);
+  const clearAll=async()=>{const d=await sg(K.notifs)||{};d[myId]=[];await ssRetry(K.notifs,d);setNotifs([]);};
+  const unread=notifs.filter(n=>!n.read).length;
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <Orb t={`🔔 NOTIFICATIONS${unread>0?" ("+unread+")":""}`}/>
+        {notifs.length>0&&<Btn label="مسح الكل" onClick={clearAll} outline small danger/>}
+      </div>
+      {notifs.length===0&&<div style={{textAlign:"center",color:E.dim2,padding:20,fontFamily:"'Orbitron',monospace",fontSize:11,letterSpacing:2}}>NO NOTIFICATIONS</div>}
+      {[...notifs].reverse().map((n,i)=>(
+        <Card key={n.id||i} style={{marginBottom:7,border:`1px solid ${n.read?"#1e1e1e":E.neon}`,opacity:n.read?.6:1}}>
+          <div style={{display:"flex",gap:9,alignItems:"flex-start"}}>
+            <div style={{fontSize:17,flexShrink:0}}>{n.type==="checkin"?"✅":n.type==="weight"?"⚖️":n.type==="pts"?"⭐":"💬"}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,color:n.read?E.dim2:E.text}}>{n.text}</div>
+              <div style={{fontSize:9,color:E.dim2,marginTop:2,fontFamily:"'Orbitron',monospace"}}>{n.time}</div>
+            </div>
+            {!n.read&&<div className="blink" style={{width:5,height:5,borderRadius:"50%",background:E.neon,flexShrink:0,marginTop:4}}/>}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ─── CHALLENGES ───────────────────────────────────────────────
+function ChalTracker({memberId,memberName,isTrainer,members}){
+  const [data,setData]=useState({});
+  useEffect(()=>{
+    const load=async()=>{const d=await sg(K.chals)||{};setData(d);};
+    load();const t=setInterval(load,5000);return()=>clearInterval(t);
+  },[]);
+  const isDone=(mId,cid)=>!!data[mId+"_w"+weekKey()+"_c"+cid];
+  const toggle=async cid=>{
+    const key=memberId+"_w"+weekKey()+"_c"+cid;
+    const updated={...data,[key]:!data[key]};setData(updated);await ssRetry(K.chals,updated);
+    if(!data[key]){
+      beep(880,.06);setTimeout(()=>beep(1100,.1),130);
+      const notifs=await sg(K.notifs)||{};const ch=CHALLENGES.find(c=>c.id===cid);
+      const tList=notifs["trainer"]||[];
+      tList.push({id:Date.now(),text:`🏆 ${memberName} أنجز "${ch?.title}"`,time:timeStr(),read:false,type:"pts"});
+      notifs["trainer"]=tList.slice(-30);await ssRetry(K.notifs,notifs);
+    }
+  };
+  if(isTrainer)return(
+    <div>
+      <Orb t="🏆 CHALLENGES"/>
+      {members.map(m=>(
+        <Card key={m.id} style={{marginBottom:9}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+            <div style={{fontWeight:700,fontSize:13,flex:1}}>{m.name}</div>
+            <Tag c={E.neon}>{CHALLENGES.filter(c=>isDone(m.id,c.id)).length}/{CHALLENGES.length}</Tag>
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {CHALLENGES.map(ch=>(
+              <div key={ch.id} style={{padding:"3px 8px",borderRadius:4,background:isDone(m.id,ch.id)?`${E.neon}18`:"#141414",border:`1px solid ${isDone(m.id,ch.id)?E.neon:"#1e1e1e"}`,fontSize:10,color:isDone(m.id,ch.id)?E.neon:E.dim2}}>
+                {isDone(m.id,ch.id)?"✅":ch.i} {ch.title.slice(0,12)}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+  return(
+    <div>
+      <Orb t="🏆 THIS WEEK"/>
+      {CHALLENGES.map(ch=>{
+        const done=isDone(memberId,ch.id);
+        return(
+          <Card key={ch.id} onClick={()=>toggle(ch.id)} style={{marginBottom:9,border:`1px solid ${done?E.neon:"#1e1e1e"}`,boxShadow:done?`0 0 12px ${E.neonGlow}`:"none",display:"flex",alignItems:"center",gap:11}}>
+            <div style={{fontSize:24}}>{done?"✅":ch.i}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:13,color:done?E.neon:E.text}}>{ch.title}</div>
+              <div style={{fontSize:10,color:E.dim2,marginTop:2}}>{done?"أنجزت!":"اضغط عند الإنجاز"}</div>
+            </div>
+            <Tag c={done?E.neon:E.gold}>+{ch.pts}⭐</Tag>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── SUBSCRIPTIONS ────────────────────────────────────────────
+function Subscriptions({isTrainer,members,myId}){
+  const [subs,setSubs]=useState({});
+  useEffect(()=>{
+    (async()=>{
+      const d=await sg(K.subs)||{};
+      const m={};
+      INIT_MEMBERS.forEach(im=>{m[im.id]={subEnd:im.subEnd||"",subStatus:im.subStatus||"active",plan:"شهري",amount:200,...(d[im.id]||{})};});
+      setSubs({...m,...d});
+    })();
+  },[]);
+  const upd=async(id,k,v)=>{const all={...subs,[id]:{...subs[id],[k]:v}};setSubs(all);await ssRetry(K.subs,all);beep(880,.06);};
+  const getDays=end=>{if(!end)return 0;return Math.max(0,Math.ceil((new Date(end)-new Date())/86400000));};
+  const sc=s=>s==="active"?E.neon:s==="expired"?E.red:E.gold;
+
+  if(!isTrainer){
+    const sub=subs[myId]||{};const days=getDays(sub.subEnd);const c=sc(sub.subStatus||"active");
+    return(
+      <div>
+        <Orb t="💳 اشتراكي"/>
+        <Card style={{textAlign:"center",marginBottom:12,border:`1px solid ${c}55`}}>
+          <div style={{fontSize:40,marginBottom:10}}>{sub.subStatus==="active"?"✅":sub.subStatus==="expired"?"❌":"⏳"}</div>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:18,fontWeight:900,color:c,marginBottom:6}}>{sub.subStatus==="active"?"ACTIVE":sub.subStatus==="expired"?"EXPIRED":"PENDING"}</div>
+          <div style={{fontSize:13,color:E.dim2,marginBottom:10}}>{sub.plan||"شهري"} · {sub.amount||200} ريال</div>
+          {sub.subEnd&&<><div style={{fontFamily:"'Orbitron',monospace",fontSize:28,fontWeight:900,color:days<=7?E.red:E.neon,marginBottom:4}}>{days}</div><div style={{fontSize:12,color:E.dim2}}>يوم متبقي · ينتهي {sub.subEnd}</div></>}
+          {days<=7&&days>0&&<div style={{marginTop:10,padding:"8px 12px",background:`${E.red}15`,border:`1px solid ${E.red}44`,borderRadius:6,fontSize:12,color:E.red}} className="pulse">⚠️ اشتراكك يقترب من الانتهاء!</div>}
+        </Card>
+      </div>
+    );
+  }
+
+  return(
+    <div>
+      <Orb t="💳 SUBSCRIPTIONS"/>
+      {Object.entries(subs).map(([id,sub])=>{
+        const m=members.find(m=>m.id===id)||{name:id};const days=getDays(sub.subEnd);const c=sc(sub.subStatus||"active");
+        return(
+          <Card key={id} style={{marginBottom:10,border:`1px solid ${c}33`}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <div style={{width:34,height:34,borderRadius:6,background:`linear-gradient(135deg,${E.neonDim},${E.neon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#000",fontFamily:"'Orbitron',monospace",flexShrink:0}}>{m.name[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1,fontFamily:"'Orbitron',monospace"}}>{days}d left · {sub.amount||200} ريال</div>
+              </div>
+              <Tag c={c}>{sub.subStatus==="active"?"ACTIVE":sub.subStatus==="expired"?"EXPIRED":"PENDING"}</Tag>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>تاريخ الانتهاء</div><input type="date" value={sub.subEnd||""} onChange={e=>upd(id,"subEnd",e.target.value)} style={{...INP,direction:"ltr",fontSize:"14px"}}/></div>
+              <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>المبلغ (ريال)</div><input type="number" value={sub.amount||200} onChange={e=>upd(id,"amount",+e.target.value)} style={INP}/></div>
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              {[["active","✅ نشط"],["pending","⏳ انتظار"],["expired","❌ منتهي"]].map(([s,l])=>(
+                <button key={s} onClick={()=>upd(id,"subStatus",s)} style={{flex:1,padding:"7px",borderRadius:5,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:sub.subStatus===s?sc(s):"transparent",color:sub.subStatus===s?"#000":E.dim2,border:`1px solid ${sc(s)}`,fontWeight:700}}>{l}</button>
+              ))}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── PROGRESS PHOTOS ─────────────────────────────────────────
+function ProgressPhotos({memberId,isTrainer,members}){
+  const [photos,setPhotos]=useState({});
+  const [selMember,setSelMember]=useState(memberId);
+  const [fullImg,setFullImg]=useState(null);
+  useEffect(()=>{(async()=>{const d=await sg(K.photos)||{};setPhotos(d);})();},[]);
+  useEffect(()=>{if(isTrainer&&members.length>0&&!selMember)setSelMember(members[0].id);},[members,isTrainer]);
+  const addPhoto=async e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      const all=await sg(K.photos)||{};const id=isTrainer?selMember:memberId;
+      if(!all[id])all[id]=[];
+      all[id].push({id:Date.now(),data:ev.target.result,date:todayStr()});
+      await ssRetry(K.photos,all);setPhotos({...all});beep(880,.07);
+    };reader.readAsDataURL(file);
+  };
+  const del=async(id,pid)=>{const all=await sg(K.photos)||{};all[id]=(all[id]||[]).filter(p=>p.id!==pid);await ssRetry(K.photos,all);setPhotos({...all});};
+  const did=isTrainer?selMember:memberId;const myPhotos=photos[did]||[];
+  return(
+    <div>
+      <Orb t="📸 PROGRESS PHOTOS"/>
+      {isTrainer&&(
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:11}}>
+          {members.map(m=>(
+            <button key={m.id} onClick={()=>setSelMember(m.id)} style={{padding:"5px 11px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selMember===m.id?E.neon:"transparent",color:selMember===m.id?"#000":E.dim2,border:`1px solid ${selMember===m.id?E.neon:"#1e1e1e"}`,fontWeight:700}}>{m.name.split(" ")[0]}</button>
+          ))}
+        </div>
+      )}
+      <label style={{display:"block",marginBottom:11}}>
+        <div style={{padding:"10px",borderRadius:7,border:`2px dashed ${E.neon}55`,textAlign:"center",cursor:"pointer",color:E.neon,fontSize:13,fontWeight:700}}>📸 رفع صورة قياس جديدة</div>
+        <input type="file" accept="image/*" onChange={addPhoto} style={{display:"none"}}/>
+      </label>
+      {fullImg&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullImg(null)}>
+          <img src={fullImg.data} style={{maxWidth:"100%",maxHeight:"85vh",borderRadius:8,objectFit:"contain"}} alt="progress"/>
+          <div style={{color:E.dim2,fontSize:12,marginTop:10}}>{fullImg.date}</div>
+        </div>
+      )}
+      {myPhotos.length===0&&<Card><div style={{textAlign:"center",color:E.dim2,padding:14,fontSize:12}}>لا توجد صور بعد</div></Card>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+        {myPhotos.map((p,i)=>(
+          <div key={p.id} style={{background:"#0f0f0f",border:`1px solid #1e1e1e`,borderRadius:8,overflow:"hidden"}}>
+            <div style={{position:"relative",paddingBottom:"100%",background:"#141414",overflow:"hidden",cursor:"pointer"}} onClick={()=>setFullImg(p)}>
+              <img src={p.data} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}} alt="progress"/>
+              <div style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.7)",borderRadius:4,padding:"2px 6px",fontSize:10,color:E.neon}}>#{i+1}</div>
+            </div>
+            <div style={{padding:"7px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:10,color:E.dim2}}>{p.date}</div>
+              <Btn label="✕" onClick={()=>del(did,p.id)} danger outline small/>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── VIDEO LIBRARY ────────────────────────────────────────────
+function VideoLibrary({isTrainer}){
+  const MUSCLES=["صدر","ظهر","أرجل","أكتاف","باي","تراي","كارديو","بطن"];
+  const [videos,setVideos]=useState([]);
+  const [form,setForm]=useState({title:"",url:"",muscle:"صدر",desc:""});
+  const [adding,setAdding]=useState(false);
+  const [playing,setPlaying]=useState(null);
+  const [filter,setFilter]=useState("الكل");
+  useEffect(()=>{(async()=>{const d=await sg(K.videos)||[];setVideos(d);})();},[]);
+  const getYTId=url=>{const m=url.match(/(?:v=|youtu\.be\/|embed\/)([^&?\s]+)/);return m?m[1]:null;};
+  const addVideo=async()=>{
+    if(!form.title||!form.url)return;
+    const all=await sg(K.videos)||[];
+    all.push({...form,id:Date.now(),ytId:getYTId(form.url)});
+    await ssRetry(K.videos,all);setVideos(all);
+    setForm({title:"",url:"",muscle:"صدر",desc:""});setAdding(false);beep(880,.06);
+  };
+  const del=async id=>{const all=(await sg(K.videos)||[]).filter(v=>v.id!==id);await ssRetry(K.videos,all);setVideos(all);};
+  const filtered=filter==="الكل"?videos:videos.filter(v=>v.muscle===filter);
+  return(
+    <div>
+      <Orb t="📹 VIDEO LIBRARY"/>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:11}}>
+        {["الكل",...MUSCLES].map(k=>(
+          <button key={k} onClick={()=>setFilter(k)} style={{padding:"4px 10px",borderRadius:4,fontSize:11,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:filter===k?E.neon:"transparent",color:filter===k?"#000":E.dim2,border:`1px solid ${filter===k?E.neon:"#1e1e1e"}`,fontWeight:700}}>{k}</button>
+        ))}
+      </div>
+      {isTrainer&&(!adding?(
+        <Btn label="➕ إضافة فيديو" onClick={()=>setAdding(true)} full style={{marginBottom:11}}/>
+      ):(
+        <Card style={{marginBottom:11}}>
+          <Orb t="➕ ADD VIDEO"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>عنوان الفيديو</div><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} style={INP}/></div>
+            <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>رابط يوتيوب</div><input value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))} style={{...INP,direction:"ltr"}}/></div>
+            <div><div style={{fontSize:10,color:E.dim2,marginBottom:4}}>العضلة</div><select value={form.muscle} onChange={e=>setForm(p=>({...p,muscle:e.target.value}))} style={INP}>{MUSCLES.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
+          </div>
+          <div style={{display:"flex",gap:8}}><Btn label="💾 حفظ" onClick={addVideo} full/><Btn label="إلغاء" onClick={()=>setAdding(false)} outline danger/></div>
+        </Card>
+      ))}
+      {playing&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{width:"100%",maxWidth:500}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:15,color:E.text}}>{playing.title}</div>
+              <Btn label="✕ إغلاق" onClick={()=>setPlaying(null)} outline danger small/>
+            </div>
+            {playing.ytId?(
+              <iframe width="100%" height="250" src={`https://www.youtube.com/embed/${playing.ytId}?autoplay=1`} frameBorder="0" allow="autoplay; encrypted-media" allowFullScreen style={{borderRadius:8}}/>
+            ):(
+              <div style={{background:"#141414",borderRadius:8,padding:20,textAlign:"center"}}>
+                <Btn label="فتح الرابط" onClick={()=>window.open(playing.url,"_blank")} style={{marginTop:10}}/>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {filtered.length===0&&<div style={{textAlign:"center",color:E.dim2,padding:20,fontFamily:"'Orbitron',monospace",fontSize:11,letterSpacing:2}}>NO VIDEOS YET</div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+        {filtered.map(v=>(
+          <div key={v.id} style={{background:"#0f0f0f",border:`1px solid #1e1e1e`,borderRadius:8,overflow:"hidden",cursor:"pointer"}} onClick={()=>setPlaying(v)}>
+            <div style={{position:"relative",paddingBottom:"56%",background:"#141414",overflow:"hidden"}}>
+              {v.ytId?(
+                <img src={`https://img.youtube.com/vi/${v.ytId}/mqdefault.jpg`} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}} alt={v.title}/>
+              ):(
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30}}>🎬</div>
+              )}
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.3)"}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:`${E.neon}cc`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#000",fontWeight:900}}>▶</div>
+              </div>
+            </div>
+            <div style={{padding:"8px 10px"}}>
+              <div style={{fontSize:12,fontWeight:700,marginBottom:3}}>{v.title}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <Tag c={E.cyan}>{v.muscle}</Tag>
+                {isTrainer&&<Btn label="✕" onClick={e=>{e.stopPropagation();del(v.id);}} danger outline small/>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── NUTRITION PAGE ───────────────────────────────────────────
+function NutritionPage({goalDefault,showMacros,members=[],memberId}){
+  const [sub,setSub]=useState("meals");
+  const [selM,setSelM]=useState(members.length>0?members[0].id:(memberId||""));
+  useEffect(()=>{if(members.length>0&&!selM)setSelM(members[0].id);},[members]);
+
+  const tabs=[["meals","📋 الجداول"],["food","🍎 الأطعمة"]];
+  if(showMacros)tabs.push(["macros","📊 ماكروز"]);
+
+  return(
+    <>
+      <div style={{display:"flex",gap:7,marginBottom:12,flexWrap:"wrap"}}>
+        {tabs.map(([k,l])=>(
+          <button key={k} onClick={()=>setSub(k)} style={{padding:"7px 14px",borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:sub===k?E.neon:"transparent",color:sub===k?"#000":E.dim2,border:`1px solid ${sub===k?E.neon:"#1e1e1e"}`,fontWeight:700}}>{l}</button>
+        ))}
+      </div>
+      {sub==="meals"&&(
+        <>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            {Object.entries(MEAL_PLANS).map(([k,v])=>(
+              <button key={k} onClick={()=>setSub("meal_"+k)} style={{padding:"6px 13px",borderRadius:5,fontSize:12,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:`${v.c}20`,color:v.c,border:`1px solid ${v.c}44`,fontWeight:700}}>{v.label}</button>
+            ))}
+          </div>
+          <Card><div style={{textAlign:"center",padding:20,color:E.dim2,fontSize:12}}>اختر جدول غذائي من الأعلى</div></Card>
+        </>
+      )}
+      {Object.entries(MEAL_PLANS).map(([k,v])=>sub==="meal_"+k&&(
+        <div key={k}>
+          {v.days[0].meals.map((m,i)=>(
+            <Card key={i} style={{marginBottom:9}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+                <div style={{fontSize:12,fontWeight:700,color:v.c}}>{m.t}</div>
+                <Tag c={E.gold}>{m.cal} cal</Tag>
+              </div>
+              {m.items.map((item,j)=><div key={j} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderBottom:`1px solid #1e1e1e`,fontSize:12}}><span style={{color:v.c,fontSize:7}}>◆</span>{item}</div>)}
+              <div style={{display:"flex",gap:9,marginTop:7}}>
+                <span style={{fontSize:10,color:E.neon,fontFamily:"'Orbitron',monospace"}}>P:{m.p}g</span>
+                <span style={{fontSize:10,color:E.gold,fontFamily:"'Orbitron',monospace"}}>C:{m.carb}g</span>
+                <span style={{fontSize:10,color:"#fb923c",fontFamily:"'Orbitron',monospace"}}>F:{m.f}g</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ))}
+      {sub==="food"&&<FoodDB/>}
+      {sub==="macros"&&showMacros&&(
+        <div>
+          {members.length===0?(
+            <Card><div style={{textAlign:"center",color:E.dim2,padding:12,fontSize:12}}>أضف متدربين أولاً</div></Card>
+          ):(
+            <>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                {members.map(m=>(
+                  <button key={m.id} onClick={()=>setSelM(m.id)} style={{padding:"6px 13px",borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:selM===m.id?E.neon:"transparent",color:selM===m.id?"#000":E.dim2,border:`1px solid ${selM===m.id?E.neon:"#1e1e1e"}`,fontWeight:700}}>{m.name.split(" ")[0]}</button>
+                ))}
+              </div>
+              {selM&&(()=>{const me=members.find(m=>m.id===selM)||members[0];const cs=calcCals(me.wt||75,me.ht||175,me.goal||"bulk");return <MacroTracker memberId={selM} targetCals={cs} targetPro={Math.round((me.wt||75)*2.2)} targetCarb={Math.round((cs*.45)/4)} targetFat={Math.round((cs*.25)/9)}/>;})()}
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── ADD MEMBER ────────────────────────────────────────────────
+function AddMemberCard({onAdd,members}){
+  const [open,setOpen]=useState(false);
+  const [nm,setNm]=useState({id:"",name:"",pass:"pass123",goal:"bulk",wt:"",ht:"",fat:""});
+  const [err,setErr]=useState("");
+  const s=(k,v)=>setNm(p=>({...p,[k]:v}));
+  const submit=async()=>{
+    setErr("");
+    if(!nm.id.trim()||!nm.name.trim()){setErr("يرجى إدخال الـ ID والاسم");return;}
+    if(/\s/.test(nm.id)){setErr("الـ ID لا يحتوي على مسافات");return;}
+    if(members.find(m=>m.id===nm.id.trim())){setErr("هذا الـ ID موجود مسبقاً");return;}
+    await onAdd({...nm,id:nm.id.trim(),wt:+nm.wt||75,ht:+nm.ht||175,fat:+nm.fat||20});
+    setNm({id:"",name:"",pass:"pass123",goal:"bulk",wt:"",ht:"",fat:""});
+    setOpen(false);beep(880,.07);
+  };
+  return(
+    <Card style={{marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:open?12:0}}>
+        <Orb t="➕ إضافة متدرب"/>
+        <Btn label={open?"✕ إغلاق":"+ إضافة"} onClick={()=>{setOpen(p=>!p);setErr("");}} outline={open} small danger={open}/>
+      </div>
+      {open&&(
+        <>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:9}}>
+            {[["الاسم الكامل *","name","text","أحمد محمد"],["ID (اسم الدخول) *","id","text","ahmed2"],["كلمة المرور","pass","password","pass123"],["الوزن (كجم)","wt","number","75"],["الطول (سم)","ht","number","175"],["نسبة الدهون %","fat","number","20"]].map(([l,k,t,ph])=>(
+              <div key={k}>
+                <div style={{fontSize:10,color:E.dim2,marginBottom:4}}>{l}</div>
+                <input type={t} value={nm[k]} onChange={e=>s(k,e.target.value)} placeholder={ph}
+                  style={{...INP,borderColor:err&&(k==="id"||k==="name")?E.red:"#1e1e1e"}}
+                  onFocus={e=>e.target.style.borderColor=E.neon} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontSize:10,color:E.dim2,marginBottom:4}}>الهدف</div>
+              <select value={nm.goal} onChange={e=>s("goal",e.target.value)} style={INP}>
+                <option value="bulk">تضخيم 🔥</option>
+                <option value="cut">تنشيف ❄️</option>
+                <option value="maintain">حفاظ ⚖️</option>
+              </select>
+            </div>
+          </div>
+          {err&&<div style={{color:E.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${E.red}12`,borderRadius:5}}>⚠️ {err}</div>}
+          <Btn label="✅ حفظ المتدرب" onClick={submit} full/>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────
+function Login({onLogin}){
+  const [mode,setMode]=useState("trainer");
+  const [u,setU]=useState("");
+  const [p,setP]=useState("");
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      const existing=await sg(K.members)||{};
+      let changed=false;
+      INIT_MEMBERS.forEach(m=>{if(!existing[m.id]){existing[m.id]=m;changed=true;}});
+      if(changed)await ssRetry(K.members,existing);
+    })();
+  },[]);
+
+  const go=()=>{
+    setErr("");setLoading(true);
+    setTimeout(async()=>{
+      try{
+        setLoading(false);
+        if(mode==="trainer"){
+          if(u===TRAINER_CREDS.user&&p===TRAINER_CREDS.pass)onLogin({role:"trainer",id:"trainer",name:TRAINER_CREDS.name});
+          else setErr("ACCESS DENIED");
+        } else {
+          const stored=await sg(K.members)||{};
+          const member=stored[u.trim()];
+          if(member&&p===member.pass)onLogin({...member,role:"member"});
+          else setErr("ACCESS DENIED — تحقق من اسم المستخدم وكلمة المرور");
+        }
+      }catch(e){setLoading(false);setErr("خطأ — حاول مرة أخرى");}
+    },500);
+  };
+
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:E.bg,fontFamily:"'Tajawal',sans-serif",direction:"rtl",position:"relative",overflow:"hidden"}}>
+      <style>{CSS}</style>
+      <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${E.neon}05 1px,transparent 1px),linear-gradient(90deg,${E.neon}05 1px,transparent 1px)`,backgroundSize:"40px 40px",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:320,height:320,borderRadius:"50%",background:`radial-gradient(circle,${E.neon}07,transparent 70%)`,pointerEvents:"none"}}/>
+      <div style={{position:"relative",background:"rgba(10,10,10,0.95)",border:`1px solid ${E.neon}33`,borderRadius:12,padding:"36px 26px",width:330,maxWidth:"92vw",boxShadow:`0 0 40px ${E.neonGlow}`}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:26,fontWeight:900,color:E.neon,letterSpacing:5,textShadow:`0 0 20px ${E.neon}`,lineHeight:1}}>COACH PRO</div>
+          <div style={{fontSize:9,color:E.dim2,marginTop:5,letterSpacing:3}}>PROFESSIONAL TRAINING PLATFORM</div>
+        </div>
+        <div style={{display:"flex",gap:0,marginBottom:16,background:"#141414",borderRadius:6,padding:3,border:`1px solid #1e1e1e`}}>
+          {["trainer","member"].map(m=>(
+            <button key={m} onClick={()=>{setMode(m);setErr("");}} style={{flex:1,padding:"8px",borderRadius:4,fontSize:13,cursor:"pointer",fontFamily:"'Tajawal',sans-serif",background:mode===m?E.neon:"transparent",color:mode===m?"#000":E.dim2,border:"none",fontWeight:700,transition:"all .2s"}}>
+              {m==="trainer"?"🏆 مدرب":"🏋️ متدرب"}
+            </button>
+          ))}
+        </div>
+        {[["اسم المستخدم",u,setU,"text",mode==="trainer"?"coach_admin":"ahmed"],["كلمة المرور",p,setP,"password","••••••"]].map(([l,v,sv,t,ph])=>(
+          <div key={l} style={{marginBottom:10}}>
+            <div style={{fontSize:10,color:E.dim2,marginBottom:4,letterSpacing:1}}>{l}</div>
+            <input type={t} value={v} onChange={e=>sv(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder={ph}
+              style={{...INP,direction:"ltr",textAlign:"right",fontFamily:"'Orbitron',monospace"}}
+              onFocus={e=>e.target.style.borderColor=E.neon} onBlur={e=>e.target.style.borderColor="#1e1e1e"}/>
+          </div>
+        ))}
+        <button onClick={go} disabled={loading} style={{width:"100%",padding:"12px",borderRadius:6,background:loading?E.neonDim:E.neon,color:"#000",border:"none",fontFamily:"'Orbitron',monospace",fontSize:12,fontWeight:900,cursor:loading?"wait":"pointer",letterSpacing:2,boxShadow:`0 0 20px ${E.neonGlow}`,marginTop:4}}>
+          {loading?"CONNECTING...":"LOGIN →"}
+        </button>
+        {err&&<div style={{marginTop:8,padding:"8px 12px",background:`${E.red}15`,border:`1px solid ${E.red}55`,borderRadius:5,fontSize:11,color:E.red,textAlign:"center",fontFamily:"'Orbitron',monospace"}}>{err}</div>}
+        <div style={{textAlign:"center",fontSize:9,color:E.dim2,marginTop:8,fontFamily:"'Orbitron',monospace"}}>
+          {mode==="trainer"?"coach_admin / Admin@2025":"ahmed | khaled | fahad / pass123"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TRAINER APP ─────────────────────────────────────────────
+function TrainerApp({user,onLogout}){
+  const [tab,setTab]=useState("overview");
+  const [members,setMembers]=useState(INIT_MEMBERS);
+  const [toast,setToast]=useState("");
+  const [attData,setAttData]=useState({});
+  const [msgUnread,setMsgUnread]=useState(0);
+  const [notifCount,setNotifCount]=useState(0);
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500);};
+
+  useEffect(()=>{
+    const poll=async()=>{
+      const sm=await sg(K.members);if(sm)setMembers(Object.values(sm));
+      const att=await sg(K.att)||{};setAttData(att);
+      const notifs=await sg(K.notifs)||{};setNotifCount((notifs["trainer"]||[]).filter(n=>!n.read).length);
+      const msgs=await sg(K.msgs)||{};let u=0;
+      (sm?Object.values(sm):INIT_MEMBERS).forEach(m=>{const cid="trainer_"+m.id;(msgs[cid]||[]).forEach(msg=>{if(msg.from!=="trainer"&&!msg.read)u++;});});
+      setMsgUnread(u);
+    };
+    poll();const t=setInterval(poll,4000);return()=>clearInterval(t);
+  },[]);
+
+  const addPts=async(id,n)=>{
+    const sm=await sg(K.members)||{};
+    if(sm[id])sm[id]={...sm[id],pts:(sm[id].pts||0)+n};
+    await ssRetry(K.members,sm);setMembers(Object.values(sm));
+    const notifs=await sg(K.notifs)||{};const list=notifs[id]||[];
+    list.push({id:Date.now(),text:`⭐ حصلت على ${n} نقطة!`,time:timeStr(),read:false,type:"pts"});
+    notifs[id]=list.slice(-20);await ssRetry(K.notifs,notifs);
+    showToast(`⭐ +${n} نقطة`);
+  };
+
+  const delMember=async id=>{
+    const sm=await sg(K.members)||{};delete sm[id];
+    await ssRetry(K.members,sm);setMembers(Object.values(sm));showToast("تم الحذف");
+  };
+
+  const addMember=async nm=>{
+    const sm=await sg(K.members)||{};
+    sm[nm.id]={...nm,plan:"program3weeks",pts:0,prog:[],date:todayStr(),subEnd:"",subStatus:"active"};
+    await ssRetry(K.members,sm);setMembers(Object.values(sm));showToast("✅ تم إضافة المتدرب");
+  };
+
+  const sorted=[...members].sort((a,b)=>(b.pts||0)-(a.pts||0));
+
+  const NAV=[
+    {k:"overview",i:"📊",l:"الرئيسية"},{k:"members",i:"👥",l:"المتدربون"},
+    {k:"attendance",i:"✅",l:"الحضور"},{k:"messages",i:"💬",l:"الرسائل"},
+    {k:"reports",i:"📈",l:"التقارير"},{k:"challenges",i:"🏆",l:"التحديات"},
+    {k:"plans",i:"📋",l:"البرامج"},{k:"nutrition",i:"🥗",l:"التغذية"},
+    {k:"videos",i:"📹",l:"الفيديوهات"},{k:"subs",i:"💳",l:"الاشتراكات"},
+    {k:"tools",i:"🛠️",l:"الأدوات"},{k:"notifs",i:"🔔",l:"إشعارات"},
+  ];
+  const badges={messages:msgUnread,notifs:notifCount};
+
+  return(
+    <div style={{background:E.bg,minHeight:"100vh",fontFamily:"'Tajawal',sans-serif",direction:"rtl",color:E.text}}>
+      <Toast msg={toast}/>
+      <Header title={NAV.find(n=>n.k===tab)?.l||""} extra={<Btn label="خروج" onClick={onLogout} outline small/>} badge={(notifCount+msgUnread)>0?`🔔 ${notifCount+msgUnread}`:null}/>
+      <PW>
+        {tab==="overview"&&(
+          <div className="a1">
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}>
+              {[[members.length,"MEMBERS",E.neon,"👥"],[members.filter(m=>!!attData[m.id+"_"+todayStr()]).length,"حاضر اليوم",E.gold,"✅"],[Object.values(attData).filter(a=>a?.week===weekKey()).length,"هذا الأسبوع",E.cyan,"📅"],[sorted[0]?.name.split(" ")[0]||"-","المتصدر",E.purple,"🏆"]].map(([v,l,c,i])=>(
+                <div key={l} style={{background:"#0f0f0f",border:`1px solid ${c}33`,borderRadius:8,padding:13,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 80% 20%,${c}08,transparent 60%)`,pointerEvents:"none"}}/>
+                  <div style={{fontSize:9,color:E.dim2,letterSpacing:2,marginBottom:5}}>{l}</div>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:typeof v==="number"?26:15,fontWeight:900,color:c,wordBreak:"break-word"}}>{v}</div>
+                  <div style={{position:"absolute",top:11,left:11,fontSize:18,opacity:.35}}>{i}</div>
+                </div>
+              ))}
+            </div>
+            <Card style={{marginBottom:11}}>
+              <Orb t="MEMBERS STATUS"/>
+              {members.map(m=>{const here=!!attData[m.id+"_"+todayStr()];return(
+                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`1px solid #1e1e1e`}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
+                    <div style={{fontSize:10,color:E.dim2,marginTop:1}}>برنامج 3 أسابيع</div>
+                  </div>
+                  <Tag c={here?E.neon:E.dim2}>{here?"✅ حاضر":"⚪ غائب"}</Tag>
+                  <Tag c={E.gold}>⭐{m.pts||0}</Tag>
+                </div>
+              );})}
+            </Card>
+            <Card>
+              <Orb t="🏆 LEADERBOARD"/>
+              {sorted.slice(0,4).map((m,i)=>(
+                <div key={m.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 10px",borderRadius:6,marginBottom:5,background:"#141414",border:`1px solid ${i===0?E.gold:"#1e1e1e"}`}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:13,fontWeight:900,width:22,textAlign:"center",color:i===0?E.gold:i===1?"#c0c0c0":i===2?"#cd7f32":E.dim2}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}</div>
+                  <div style={{flex:1,fontWeight:600,fontSize:13}}>{m.name}</div>
+                  <div style={{fontFamily:"'Orbitron',monospace",color:E.gold,fontWeight:700,fontSize:11}}>⭐{m.pts||0}</div>
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
+        {tab==="members"&&(
+          <div className="a1">
+            <AddMemberCard members={members} onAdd={addMember}/>
+            <Card>
+              <Orb t={`MEMBERS (${members.length})`}/>
+              {members.map(m=>(
+                <div key={m.id} style={{padding:"9px 0",borderBottom:`1px solid #1e1e1e`,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                  <div style={{width:32,height:32,borderRadius:6,background:`linear-gradient(135deg,${E.neonDim},${E.neon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#000",fontFamily:"'Orbitron',monospace",flexShrink:0}}>{m.name[0]}</div>
+                  <div style={{flex:1,minWidth:80}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
+                    <div style={{fontSize:10,color:E.dim2,fontFamily:"'Orbitron',monospace",marginTop:1}}>@{m.id} · {m.wt}kg · {m.fat}%</div>
+                  </div>
+                  <Tag c={m.goal==="bulk"?E.neon:m.goal==="cut"?E.red:E.gold}>{m.goal==="bulk"?"BULK":m.goal==="cut"?"CUT":"MAIN"}</Tag>
+                  <Tag c={E.gold}>⭐{m.pts||0}</Tag>
+                  <div style={{display:"flex",gap:4}}>
+                    {[10,25,50].map(n=><Btn key={n} label={`+${n}⭐`} onClick={()=>addPts(m.id,n)} small/>)}
+                    <Btn label="حذف" onClick={()=>delMember(m.id)} danger outline small/>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
+        {tab==="attendance"&&<div className="a1"><Attendance memberId={user.id} memberName={user.name} isTrainer members={members}/></div>}
+        {tab==="messages"&&<div className="a1"><Messaging myId={user.id} myName={user.name} isTrainer members={members}/></div>}
+        {tab==="reports"&&<div className="a1"><WeeklyReport memberId={null} memberData={null} isTrainer members={members} allAtt={attData}/></div>}
+        {tab==="challenges"&&<div className="a1"><ChalTracker memberId={user.id} memberName={user.name} isTrainer members={members}/></div>}
+        {tab==="plans"&&<div className="a1"><CustomPlans memberId={null} isTrainer members={members}/></div>}
+        {tab==="videos"&&<div className="a1"><VideoLibrary isTrainer/></div>}
+        {tab==="subs"&&<div className="a1"><Subscriptions isTrainer members={members} myId={user.id}/></div>}
+        {tab==="nutrition"&&<div className="a1"><NutritionPage goalDefault="bulk" showMacros members={members}/></div>}
+        {tab==="tools"&&(
+          <div className="a1">
+            <Orb t="🛠️ TOOLS"/>
+            <RestTimer/>
+            <WaterTracker wt={80}/>
+            <FatCalc/>
+            <CalcTool/>
+          </div>
+        )}
+        {tab==="notifs"&&<div className="a1"><Notifs myId="trainer"/></div>}
+      </PW>
+      <BottomNav items={NAV} tab={tab} setTab={setTab} badges={badges}/>
+    </div>
+  );
+}
+
+// ─── MEMBER APP ───────────────────────────────────────────────
+function MemberApp({user,onLogout}){
+  const [tab,setTab]=useState("home");
+  const [me,setMe]=useState(user);
+  const [toast,setToast]=useState("");
+  const [attData,setAttData]=useState({});
+  const [msgUnread,setMsgUnread]=useState(0);
+  const [notifCount,setNotifCount]=useState(0);
+  const [wIn,setWIn]=useState("");
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2400);};
+
+  const fc=fatCat(me.fat||0);
+  const cs=calcCals(me.wt||75,me.ht||175,me.goal||"bulk");
+  const protein=Math.round((me.wt||75)*2.2);
+  const carb=Math.round((cs*.45)/4);
+  const fat=Math.round((cs*.25)/9);
+
+  useEffect(()=>{
+    const poll=async()=>{
+      const sm=await sg(K.members)||{};if(sm[me.id])setMe(p=>({...p,...sm[me.id]}));
+      const att=await sg(K.att)||{};setAttData(att);
+      const notifs=await sg(K.notifs)||{};setNotifCount((notifs[me.id]||[]).filter(n=>!n.read).length);
+      const msgs=await sg(K.msgs)||{};const cid="trainer_"+me.id;const u=(msgs[cid]||[]).filter(m=>m.from!==me.id&&!m.read).length;setMsgUnread(u);
+    };
+    poll();const t=setInterval(poll,4000);return()=>clearInterval(t);
+  },[]);
+
+  const logW=async()=>{
+    if(!wIn)return;
+    const mn=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][new Date().getMonth()];
+    const sm=await sg(K.members)||{};
+    const updated={...me,wt:+wIn,prog:[...(me.prog||[]),{m:mn,w:+wIn}]};
+    sm[me.id]=updated;await ssRetry(K.members,sm);setMe(updated);setWIn("");showToast("✅ تم تسجيل الوزن");beep(880,.07);
+    const notifs=await sg(K.notifs)||{};const tList=notifs["trainer"]||[];
+    tList.push({id:Date.now(),text:`⚖️ ${me.name} سجّل وزن: ${wIn} كجم`,time:timeStr(),read:false,type:"weight"});
+    notifs["trainer"]=tList.slice(-30);await ssRetry(K.notifs,notifs);
+  };
+
+  const checkIn=async()=>{
+    if(attData[me.id+"_"+todayStr()])return;
+    const att=await sg(K.att)||{};const today=todayStr();const key=me.id+"_"+today;
+    att[key]={memberId:me.id,memberName:me.name,date:today,time:timeStr(),week:weekKey()};
+    await ssRetry(K.att,att);setAttData({...att});beep(880,.07);setTimeout(()=>beep(1100,.1),130);showToast("✅ تم تسجيل حضورك");
+    const notifs=await sg(K.notifs)||{};const tList=notifs["trainer"]||[];
+    tList.push({id:Date.now(),text:`✅ ${me.name} سجّل حضوره`,time:timeStr(),read:false,type:"checkin"});
+    notifs["trainer"]=tList.slice(-30);await ssRetry(K.notifs,notifs);
+  };
+
+  const DAYS_AR=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const todayName=DAYS_AR[new Date().getDay()];
+  const plan=PLANS[me.plan]||PLANS["program3weeks"];
+  const planAllDays=plan?.weeks?plan.weeks.flatMap(w=>w.days):(plan?.days||[]);
+  const todayW=planAllDays.find(d=>d.l&&!d.l.includes("راحة"));
+  const checkedToday=!!attData[me.id+"_"+todayStr()];
+  const weekAtt=Object.keys(attData).filter(k=>k.startsWith(me.id+"_")&&attData[k]?.week===weekKey()).length;
+  const wtChange=me.prog&&me.prog.length>=2?(me.prog[me.prog.length-1].w-me.prog[0].w).toFixed(1):0;
+  const goalPct=Math.min(100,Math.round(Math.max(0,me.goal==="bulk"?(+wtChange/4*100):(-wtChange/4*100))));
+
+  const NAV=[
+    {k:"home",i:"🏠",l:"الرئيسية"},{k:"workout",i:"🏋️",l:"التمرين"},
+    {k:"macros",i:"🥗",l:"الماكروز"},{k:"attendance",i:"✅",l:"الحضور"},
+    {k:"messages",i:"💬",l:"الرسائل"},{k:"report",i:"📊",l:"تقريري"},
+    {k:"photos",i:"📸",l:"القياس"},{k:"plans",i:"📋",l:"برنامجي"},
+    {k:"tools",i:"🛠️",l:"الأدوات"},{k:"nutrition",i:"🍽️",l:"التغذية"},
+    {k:"subs",i:"💳",l:"اشتراكي"},{k:"notifs",i:"🔔",l:"إشعارات"},
+  ];
+  const badges={messages:msgUnread,notifs:notifCount};
+
+  return(
+    <div style={{background:E.bg,minHeight:"100vh",fontFamily:"'Tajawal',sans-serif",direction:"rtl",color:E.text}}>
+      <Toast msg={toast}/>
+      {tab==="home"?(
+        <div style={{position:"sticky",top:0,zIndex:900,background:"rgba(5,5,5,0.95)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",borderBottom:`1px solid #1e1e1e`,padding:"11px 15px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,fontWeight:900,color:E.neon,letterSpacing:4,textShadow:`0 0 8px ${E.neon}`}}>COACH PRO</div>
+          <div style={{display:"flex",gap:7,alignItems:"center"}}>
+            {(notifCount+msgUnread)>0&&<span className="pulse" style={{background:`${E.red}22`,border:`1px solid ${E.red}`,borderRadius:20,padding:"2px 7px",fontSize:11,color:E.red,fontWeight:700}}>{notifCount+msgUnread}</span>}
+            <Btn label="خروج" onClick={onLogout} outline small/>
+          </div>
+        </div>
+      ):(
+        <Header title={NAV.find(n=>n.k===tab)?.l||""} extra={<Btn label="خروج" onClick={onLogout} outline small/>} badge={(notifCount+msgUnread)>0?`🔔 ${notifCount+msgUnread}`:null}/>
+      )}
+      <PW>
+        {tab==="home"&&(
+          <div>
+            {/* Hero */}
+            <div className="a1" style={{background:`linear-gradient(135deg,#050505,#0a1a0a)`,border:`1px solid ${E.neon}22`,borderRadius:12,padding:"17px 15px",marginBottom:11,position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${E.neon}05 1px,transparent 1px),linear-gradient(90deg,${E.neon}05 1px,transparent 1px)`,backgroundSize:"28px 28px",pointerEvents:"none"}}/>
+              <div style={{position:"relative",display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{width:50,height:50,borderRadius:8,flexShrink:0,background:`linear-gradient(135deg,${E.neonDim},${E.neon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"#000",fontFamily:"'Orbitron',monospace"}}>{me.name[0]}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:8,color:E.neonDim,letterSpacing:3,marginBottom:2,fontFamily:"'Orbitron',monospace"}}>{new Date().getHours()<12?"GOOD MORNING":new Date().getHours()<17?"GOOD AFTERNOON":"GOOD EVENING"}</div>
+                  <div style={{fontSize:17,fontWeight:900}}>{me.name.split(" ")[0]}</div>
+                  <div style={{fontSize:11,color:E.dim2,marginTop:2}}>برنامج 3 أسابيع · {me.goal==="bulk"?"BULKING":me.goal==="cut"?"CUTTING":"MAINTAIN"}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:17,fontWeight:900,color:E.gold}}>⭐{me.pts||0}</div>
+                  <div style={{fontSize:9,color:E.dim2,letterSpacing:1}}>POINTS</div>
+                </div>
+              </div>
+              <div style={{background:"rgba(0,255,102,0.05)",border:`1px solid ${E.neon}18`,borderRadius:7,padding:"8px 11px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <div style={{fontSize:10,color:E.text,letterSpacing:1}}>{me.goal==="bulk"?"BULK PROGRESS":"CUT PROGRESS"}</div>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:10,fontWeight:900,color:E.neon}}>{goalPct}%</div>
+                </div>
+                <div style={{height:5,background:"rgba(255,255,255,0.05)",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",borderRadius:3,width:`${Math.max(3,goalPct)}%`,background:`linear-gradient(90deg,${E.neonDim},${E.neon})`,transition:"width 1s"}}/>
+                </div>
+              </div>
+            </div>
+            {/* Check-in */}
+            <div className="a2" onClick={checkIn} style={{background:checkedToday?`${E.neon}0a`:"#0f0f0f",border:`1px solid ${checkedToday?E.neon:"#1e1e1e"}`,borderRadius:9,padding:"12px 13px",marginBottom:11,display:"flex",alignItems:"center",gap:11,cursor:checkedToday?"default":"pointer",boxShadow:checkedToday?`0 0 14px ${E.neonGlow}`:"none"}}>
+              <div style={{fontSize:24}}>{checkedToday?"✅":"🏋️"}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:checkedToday?E.neon:E.text}}>{checkedToday?"حضرت اليوم! رائع 💪":"سجّل حضورك الآن"}</div>
+                <div style={{fontSize:10,color:E.dim2,marginTop:1}}>{todayW?todayW.l:"استمر في البرنامج"} · هذا الأسبوع: {weekAtt} أيام</div>
+              </div>
+              {!checkedToday&&<div style={{color:E.neon,fontSize:14,fontFamily:"'Orbitron',monospace"}}>→</div>}
+            </div>
+            {/* Today workout */}
+            {todayW&&(
+              <div className="a3" onClick={()=>setTab("workout")} style={{background:`${E.neon}08`,border:`1px solid ${E.neon}33`,borderRadius:9,padding:"11px 13px",marginBottom:11,cursor:"pointer",display:"flex",alignItems:"center",gap:11}}>
+                <div style={{width:42,height:42,borderRadius:7,background:`${E.neon}18`,border:`1px solid ${E.neon}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🏋️</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,color:E.dim2,letterSpacing:2}}>TODAY'S WORKOUT</div>
+                  <div style={{fontSize:14,fontWeight:800,color:E.neon,marginTop:2}}>{todayW.l}</div>
+                </div>
+                <div style={{color:E.neon,fontFamily:"'Orbitron',monospace",fontSize:14}}>→</div>
+              </div>
+            )}
+            {/* Rings */}
+            <div className="a4" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:11}}>
+              {[[cs,"CAL",E.gold,75],[protein+"g","PRO",E.neon,68],[me.fat+"%","FAT",fc.c,Math.min(100,((me.fat||0)/35)*100)],[me.wt+" kg","WT",E.cyan,80]].map(([v,l,c,p])=>(
+                <div key={l} style={{background:"#0f0f0f",border:`1px solid ${c}22`,borderRadius:8,padding:"10px 5px",textAlign:"center",position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 0%,${c}08,transparent 70%)`,pointerEvents:"none"}}/>
+                  <Ring pct={p} size={44} stroke={4} color={c}/>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontSize:9,fontWeight:700,color:c,marginTop:3,lineHeight:1}}>{v}</div>
+                  <div style={{fontSize:8,color:E.dim2,marginTop:1}}>{l}</div>
+                </div>
+              ))}
+            </div>
+            {/* Weight log */}
+            <div className="a5">
+              <Card neon style={{marginBottom:11}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+                  <div style={{fontSize:11,fontWeight:700,letterSpacing:1}}>⚖️ سجّل وزنك</div>
+                  {me.prog&&me.prog.length>0&&<div style={{fontFamily:"'Orbitron',monospace",fontSize:9,color:E.dim2}}>last: {me.prog[me.prog.length-1].w}kg</div>}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:me.prog&&me.prog.length?9:0}}>
+                  <input type="number" value={wIn} onChange={e=>setWIn(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logW()} placeholder={me.wt+" kg"} style={{...INP,flex:1,fontFamily:"'Orbitron',monospace"}}/>
+                  <Btn label="LOG ✓" onClick={logW}/>
+                </div>
+                {me.prog&&me.prog.length>0&&<MiniChart data={me.prog}/>}
+              </Card>
+              {/* Quick nav */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[["workout","🏋️","التمرين","ابدأ التمرين",E.neon],["macros","🥗","الماكروز","تتبع وجباتك",E.gold],["messages","💬","الرسائل","تواصل مع مدربك",E.cyan],["plans","📋","برنامجي","برنامجك المخصص",E.purple]].map(([t,i,l,s,c])=>(
+                  <div key={t} onClick={()=>setTab(t)} style={{background:"#0f0f0f",border:`1px solid #1e1e1e`,borderRadius:8,padding:"11px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:9,transition:"all .2s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=c;}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";}}>
+                    <div style={{width:34,height:34,borderRadius:7,flexShrink:0,background:`${c}15`,border:`1px solid ${c}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{i}</div>
+                    <div><div style={{fontSize:12,fontWeight:700}}>{l}</div><div style={{fontSize:10,color:E.dim2,marginTop:1}}>{s}</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {tab==="workout"&&<div className="a1"><WorkoutLoggerWrapper memberId={me.id} plan={me.plan}/></div>}
+        {tab==="macros"&&<div className="a1"><MacroTracker memberId={me.id} targetCals={cs} targetPro={protein} targetCarb={carb} targetFat={fat}/></div>}
+        {tab==="attendance"&&<div className="a1"><Attendance memberId={me.id} memberName={me.name} isTrainer={false} members={[]}/></div>}
+        {tab==="messages"&&<div className="a1"><Messaging myId={me.id} myName={me.name} isTrainer={false} members={[]}/></div>}
+        {tab==="report"&&<div className="a1"><WeeklyReport memberId={me.id} memberData={me} isTrainer={false} members={[me]} allAtt={attData}/></div>}
+        {tab==="photos"&&<div className="a1"><ProgressPhotos memberId={me.id} isTrainer={false} members={[]}/></div>}
+        {tab==="plans"&&<div className="a1"><CustomPlans memberId={me.id} isTrainer={false} members={[]}/></div>}
+        {tab==="tools"&&(
+          <div className="a1">
+            <Orb t="🛠️ TOOLS"/>
+            <RestTimer/>
+            <WaterTracker wt={me.wt||70}/>
+            <FatCalc/>
+            <Card style={{marginBottom:12}}>
+              <Orb t="💡 نصائح الاستشفاء"/>
+              {TIPS.recovery.map((t,i)=><div key={i} style={{borderRight:`2px solid ${E.neon}44`,paddingRight:9,marginBottom:7,fontSize:12,lineHeight:1.7,color:E.text}}>{t}</div>)}
+            </Card>
+          </div>
+        )}
+        {tab==="nutrition"&&<div className="a1"><NutritionPage goalDefault={me.goal} memberId={me.id}/></div>}
+        {tab==="subs"&&<div className="a1"><Subscriptions isTrainer={false} members={[]} myId={me.id}/></div>}
+        {tab==="notifs"&&<div className="a1"><Notifs myId={me.id}/></div>}
+      </PW>
+      <BottomNav items={NAV} tab={tab} setTab={setTab} badges={badges}/>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────
+export default function App(){
+  const [user,setUser]=useState(null);
+  useEffect(()=>{
+    // Mobile meta
+    let vm=document.querySelector('meta[name="viewport"]');
+    if(!vm){vm=document.createElement('meta');vm.name='viewport';document.head.appendChild(vm);}
+    vm.content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover';
+    let tc=document.querySelector('meta[name="theme-color"]');
+    if(!tc){tc=document.createElement('meta');tc.name='theme-color';document.head.appendChild(tc);}
+    tc.content='#050505';
+    // Apple PWA meta
+    const metas=[['apple-mobile-web-app-capable','yes'],['apple-mobile-web-app-status-bar-style','black-translucent'],['apple-mobile-web-app-title','COACH PRO']];
+    metas.forEach(([name,content])=>{let m=document.querySelector(`meta[name="${name}"]`);if(!m){m=document.createElement('meta');m.name=name;document.head.appendChild(m);}m.content=content;});
+    // Block right-click
+    const block=e=>e.preventDefault();
+    document.addEventListener("contextmenu",block);
+    return()=>document.removeEventListener("contextmenu",block);
+  },[]);
+  return(
+    <>
+      <style>{CSS}</style>
+      {!user
+        ?<Login onLogin={setUser}/>
+        :user.role==="trainer"
+          ?<TrainerApp user={user} onLogout={()=>setUser(null)}/>
+          :<MemberApp user={user} onLogout={()=>setUser(null)}/>
+      }
+    </>
+  );
+}
